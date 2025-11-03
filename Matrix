@@ -14,24 +14,24 @@ SELECT
     act.user_type_code,
     act.worker_id AS person_id,
     rul.rule_id,
-    rul.display_rule_name AS rule,
+    rul.display_rule_name rule,
     (SELECT cond.condition_name
        FROM por_amx_rule_conditions cond
       WHERE cond.rule_id = rul.rule_id
-        AND ROWNUM = 1) AS condition,
-    act.action_code AS action,
+        AND ROWNUM = 1) condition,
+    act.action_code action,
     CASE
         WHEN rul.sandbox_flag = 'N' AND act.sandbox_flag = 'N'
         THEN 'Y'
         ELSE 'N'
-    END AS is_active,
-    task.task_key AS task,
+    END is_active,
+    task.task_key task,
     (SELECT stg.display_stage_name
        FROM por_amx_stages stg
       WHERE stg.stage_key = rul.stage_key
-        AND ROWNUM = 1) AS stage,
-    part.participant_key AS participant,
-    'DIRECT APPROVER MISSING' AS issue_type
+        AND ROWNUM = 1) stage,
+    part.participant_key participant,
+    'DIRECT APPROVER MISSING' issue_type
 FROM
     por_amx_actions act,
     por_amx_rules rul,
@@ -75,24 +75,24 @@ SELECT
     act.start_with_code,
     act.do_not_route_beyond_id AS person_id,
     rul.rule_id,
-    rul.display_rule_name AS rule,
+    rul.display_rule_name rule,
     (SELECT cond.condition_name
        FROM por_amx_rule_conditions cond
       WHERE cond.rule_id = rul.rule_id
-        AND ROWNUM = 1) AS condition,
-    act.action_code AS action,
+        AND ROWNUM = 1) condition,
+    act.action_code action,
     CASE
         WHEN rul.sandbox_flag = 'N' AND act.sandbox_flag = 'N'
         THEN 'Y'
         ELSE 'N'
-    END AS is_active,
-    task.task_key AS task,
+    END is_active,
+    task.task_key task,
     (SELECT stg.display_stage_name
        FROM por_amx_stages stg
       WHERE stg.stage_key = rul.stage_key
-        AND ROWNUM = 1) AS stage,
-    part.participant_key AS participant,
-    'HIERARCHY STOP MISSING' AS issue_type
+        AND ROWNUM = 1) stage,
+    part.participant_key participant,
+    'HIERARCHY STOP MISSING' issue_type
 FROM
     por_amx_actions act,
     por_amx_rules rul,
@@ -120,3 +120,4 @@ WHERE
           AND assignments.primary_flag = 'Y'
           AND people.person_id = act.do_not_route_beyond_id
     );
+``
