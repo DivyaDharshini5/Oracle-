@@ -1,0 +1,105 @@
+SELECT
+    ROW_NUMBER() OVER (ORDER BY r.set_id, r.sequence_num) AS "Sr_No",
+    
+    ou.name AS "Business Unit",
+    r.set_id AS "Rule Set ID",
+    r.sequence_num AS "Sequence Number",
+    r.condition AS "Rule Condition",
+    NVL(r.amount, 0) AS "Amount Threshold",
+    NVL(r.percent, 0) AS "Percent Threshold",
+    NVL(r.user_reqd_flag, 'N') AS "User Required Flag",
+    r.receivables_trx_id AS "Receivable Transaction ID",
+    rl.meaning AS "Rule Status",
+    
+    CASE 
+        WHEN UPPER(r.action) LIKE '%APPROVAL%' THEN 'Requires Approval'
+        WHEN UPPER(r.action) LIKE '%AUTO%' THEN 'Automatic'
+        WHEN UPPER(r.action) LIKE '%INFO%' THEN 'Information Only'
+        ELSE 'Other'
+    END AS "Action Type",
+
+    CASE
+        WHEN r.amount > 100000 THEN 'High Value Rule'
+        WHEN r.amount BETWEEN 10000 AND 100000 THEN 'Medium Value Rule'
+        WHEN r.amount IS NOT NULL THEN 'Low Value Rule'
+        ELSE 'Non-Value Rule'
+    END AS "Rule Category",
+
+    NVL(a.action_code, 'N/A') AS "Approval Action Code",
+    NVL(a.route_using_code, 'N/A') AS "Routing Method",
+    NVL(a.last_update_date, r.last_update_date) AS "Last Updated Date",
+    NVL(u.user_name, 'SYSTEM') AS "Last Updated By",
+
+    -- Approval Hierarchy Information
+    CASE 
+        WHEN a.route_using_code = 'APPROVAL_GROUP' THEN 'Approval Group Route'
+        WHEN a.route_using_code = 'SINGLE_APPROVER' THEN 'Single Approver Route'
+        WHEN a.route_using_code = 'SUPERVISOR_HIERARCHY' THEN 'Supervisor Hierarchy Route'
+        ELSE 'Unspecified Route'
+    END AS "Routing Category",
+    
+    -- Rule Effectiveness Status
+    CASE 
+        WHEN SYSDATE BETWEEN NVL(r.start_date_active, SYSDATE - 1)
+                         AND NVL(r.end_date_active, SYSDATE + 1E6)
+        THEN 'Active'
+        ELSE 'Inactive'
+    END AS "Active Status",
+
+    -- Audit / Metadata
+    r.creation_date AS "Created On",
+    NVL(usr.user_name, 'SYSTEM') AS "Created By"
+
+FROM
+    -- Core AR approval rules table
+    AR_APP_RULES r
+
+    -- Join with action reference table
+    LEFT JOIN AR_APPROVAL_ACTION_HISTORY a
+        ON r.receivables_trx_id = a.receivables_trx_id
+
+    -- Join with business unit / organization table
+    LEFT JOIN HR_ALL_ORGANIZATION_UNITS_F_VL ou
+        ON ou.organization_id = a.org_id
+
+    -- Join to FND lookup for rule status codes
+    LEFT JOIN FND_LOOKUPS rl
+        ON rl.lookup_type = 'AR_RULE_STATUS'
+       AND rl.lookup_code = r.action
+
+    -- Join to user table for audit trail
+    LEFT JOIN FND_USER usr
+        ON usr.user_id = r.created_by
+    LEFT JOIN FND_USER u
+        ON u.user_id = NVL(r.last_updated_by, r.created_by)
+
+WHERE
+      -- Optional Filter: Business Unit
+      (:P_BUSINESS_UNIT IS NULL OR ou.name = :P_BUSINESS_UNIT)
+  AND -- Optional Filter: Action Type
+      (:P_ACTION_TYPE IS NULL OR 
+         ( :P_ACTION_TYPE = 'APPROVAL' AND UPPER(r.action) LIKE '%APPROVAL%' ) OR
+         ( :P_ACTION_TYPE = 'AUTO' AND UPPER(r.action) LIKE '%AUTO%' ) OR
+         ( :P_ACTION_TYPE = 'INFO' AND UPPER(r.action) LIKE '%INFO%' )
+      )
+  AND -- Optional Filter: Routing Type
+      (:P_ROUTING_TYPE IS NULL OR 
+         ( :P_ROUTING_TYPE = 'GROUP' AND a.route_using_code = 'APPROVAL_GROUP' ) OR
+         ( :P_ROUTING_TYPE = 'SUPERVISOR' AND a.route_using_code = 'SUPERVISOR_HIERARCHY' ) OR
+         ( :P_ROUTING_TYPE = 'SINGLE' AND a.route_using_code = 'SINGLE_APPROVER' )
+      )
+  AND -- Optional Filter: Amount Range
+      (:P_MIN_AMOUNT IS NULL OR r.amount >= :P_MIN_AMOUNT)
+  AND (:P_MAX_AMOUNT IS NULL OR r.amount <= :P_MAX_AMOUNT)
+  AND -- Optional Filter: Active/Inactive
+      (:P_ACTIVE_STATUS IS NULL OR 
+         ( :P_ACTIVE_STATUS = 'ACTIVE' AND SYSDATE BETWEEN NVL(r.start_date_active, SYSDATE - 1)
+                                                       AND NVL(r.end_date_active, SYSDATE + 1E6) )
+         OR ( :P_ACTIVE_STATUS = 'INACTIVE' AND NOT (SYSDATE BETWEEN NVL(r.start_date_active, SYSDATE - 1)
+                                                                     AND NVL(r.end_date_active, SYSDATE + 1E6)) )
+      )
+
+ORDER BY
+    ou.name,
+    r.set_id,
+    r.sequence_num;
