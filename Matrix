@@ -16,10 +16,7 @@ SELECT
         ELSE 'N'
     END AS is_active,
     task.task_key AS task,
-    (SELECT stg.display_stage_name
-       FROM FUSION.POR_AMX_STAGES stg
-      WHERE stg.stage_key = rul.stage_key
-        AND ROWNUM = 1) AS stage,
+    NULL AS stage,
     part.participant_key AS participant,
     'DIRECT APPROVER MISSING' AS issue_type
 FROM
@@ -71,10 +68,7 @@ SELECT
         ELSE 'N'
     END AS is_active,
     task.task_key AS task,
-    (SELECT stg.display_stage_name
-       FROM FUSION.POR_AMX_STAGES stg
-      WHERE stg.stage_key = rul.stage_key
-        AND ROWNUM = 1) AS stage,
+    NULL AS stage,
     part.participant_key AS participant,
     'HIERARCHY STOP MISSING' AS issue_type
 FROM
@@ -103,4 +97,4 @@ WHERE
           AND assignments.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
           AND assignments.primary_flag = 'Y'
           AND people.person_id = act.do_not_route_beyond_id
-    )
+    )    
