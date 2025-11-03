@@ -12,7 +12,7 @@ SELECT
     act.action_code,
     act.route_using_code,
     act.user_type_code,
-    act.worker_id AS person_id,
+    act.worker_id person_id,
     rul.rule_id,
     rul.display_rule_name rule,
     (SELECT cond.condition_name
@@ -21,8 +21,7 @@ SELECT
         AND ROWNUM = 1) condition,
     act.action_code action,
     CASE
-        WHEN rul.sandbox_flag = 'N' AND act.sandbox_flag = 'N'
-        THEN 'Y'
+        WHEN rul.sandbox_flag = 'N' AND act.sandbox_flag = 'N' THEN 'Y'
         ELSE 'N'
     END is_active,
     task.task_key task,
@@ -38,15 +37,15 @@ FROM
     por_amx_participants part,
     por_amx_tasks task
 WHERE
-    task.task_key = 'Document Approval'              -- TARGETING PO APPROVAL TASK
+    task.task_key = 'Document Approval'
     AND act.rule_id = rul.rule_id
     AND act.action_code = 'APPROVAL REQUIRED'
-    AND act.route_using_code = 'SINGLE APPROVER'     -- Find rules routing to a named person
+    AND act.route_using_code = 'SINGLE APPROVER'
     AND act.user_type_code = 'WORKER'
     AND rul.participant_id = part.participant_id
     AND rul.task_id = task.task_id
-    AND rul.sandbox_flag = 'N'                       -- Checking ACTIVE production rules
-    AND act.sandbox_flag = 'N'                       -- Checking ACTIVE production rules
+    AND rul.sandbox_flag = 'N'
+    AND act.sandbox_flag = 'N'
     AND act.worker_id IS NOT NULL
     AND NOT EXISTS (
         SELECT 1
@@ -73,7 +72,7 @@ SELECT
     act.action_code,
     act.route_using_code,
     act.start_with_code,
-    act.do_not_route_beyond_id AS person_id,
+    act.do_not_route_beyond_id person_id,
     rul.rule_id,
     rul.display_rule_name rule,
     (SELECT cond.condition_name
@@ -82,8 +81,7 @@ SELECT
         AND ROWNUM = 1) condition,
     act.action_code action,
     CASE
-        WHEN rul.sandbox_flag = 'N' AND act.sandbox_flag = 'N'
-        THEN 'Y'
+        WHEN rul.sandbox_flag = 'N' AND act.sandbox_flag = 'N' THEN 'Y'
         ELSE 'N'
     END is_active,
     task.task_key task,
@@ -99,15 +97,15 @@ FROM
     por_amx_participants part,
     por_amx_tasks task
 WHERE
-    task.task_key = 'Document Approval'              -- TARGETING PO APPROVAL TASK
+    task.task_key = 'Document Approval'
     AND act.rule_id = rul.rule_id
     AND act.action_code = 'APPROVAL REQUIRED'
     AND act.route_using_code IN ('SUPERVISORY HIERARCHY', 'JOB LEVEL')
-    AND act.do_not_route_beyond_id IS NOT NULL       -- Find rules with a specific stop
+    AND act.do_not_route_beyond_id IS NOT NULL
     AND rul.participant_id = part.participant_id
     AND rul.task_id = task.task_id
-    AND rul.sandbox_flag = 'N'                       -- Checking ACTIVE production rules
-    AND act.sandbox_flag = 'N'                       -- Checking ACTIVE production rules
+    AND rul.sandbox_flag = 'N'
+    AND act.sandbox_flag = 'N'
     AND NOT EXISTS (
         SELECT 1
         FROM per_all_assignments_m assignments,
@@ -120,4 +118,3 @@ WHERE
           AND assignments.primary_flag = 'Y'
           AND people.person_id = act.do_not_route_beyond_id
     );
-``
