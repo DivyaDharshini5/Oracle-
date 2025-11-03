@@ -1,10 +1,3 @@
-
-
-/* =====================================================================
-   DIRECT APPROVER MISSING + HIERARCHY STOP MISSING VALIDATION
-   ===================================================================== */
-
--- DIRECT APPROVER MISSING
 SELECT
     act.action_id,
     task.task_key,
@@ -39,12 +32,12 @@ FROM
     JOIN por_amx_participants part ON rul.participant_id = part.participant_id
     JOIN por_amx_tasks task ON rul.task_id = task.task_id
 WHERE
-    task.task_key = 'Document Approval'              -- TARGETING PO APPROVAL TASK
+    task.task_key = 'Document Approval'
     AND act.action_code = 'APPROVAL REQUIRED'
-    AND act.route_using_code = 'SINGLE APPROVER'     -- Find rules routing to a named person
+    AND act.route_using_code = 'SINGLE APPROVER'
     AND act.user_type_code = 'WORKER'
-    AND rul.sandbox_flag = 'N'                       -- Checking ACTIVE production rules
-    AND act.sandbox_flag = 'N'                       -- Checking ACTIVE production rules
+    AND rul.sandbox_flag = 'N'
+    AND act.sandbox_flag = 'N'
     AND act.worker_id IS NOT NULL
     AND NOT EXISTS (
         SELECT 1
@@ -58,10 +51,7 @@ WHERE
           AND assignments.primary_flag = 'Y'
           AND people.person_id = act.worker_id
     )
-
 UNION ALL
-
--- HIERARCHY STOP MISSING
 SELECT
     act.action_id,
     task.task_key,
@@ -96,12 +86,12 @@ FROM
     JOIN por_amx_participants part ON rul.participant_id = part.participant_id
     JOIN por_amx_tasks task ON rul.task_id = task.task_id
 WHERE
-    task.task_key = 'Document Approval'              -- TARGETING PO APPROVAL TASK
+    task.task_key = 'Document Approval'
     AND act.action_code = 'APPROVAL REQUIRED'
     AND act.route_using_code IN ('SUPERVISORY HIERARCHY', 'JOB LEVEL')
-    AND act.do_not_route_beyond_id IS NOT NULL       -- Find rules with a specific stop
-    AND rul.sandbox_flag = 'N'                       -- Checking ACTIVE production rules
-    AND act.sandbox_flag = 'N'                       -- Checking ACTIVE production rules
+    AND act.do_not_route_beyond_id IS NOT NULL
+    AND rul.sandbox_flag = 'N'
+    AND act.sandbox_flag = 'N'
     AND NOT EXISTS (
         SELECT 1
         FROM per_all_assignments_m assignments
@@ -114,5 +104,3 @@ WHERE
           AND assignments.primary_flag = 'Y'
           AND people.person_id = act.do_not_route_beyond_id
     );
-
-
