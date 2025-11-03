@@ -1,0 +1,161 @@
+Excellent — I see what’s happening here 👇
+
+You’ve pasted what looks like a draft of an AMX validation query (in natural language with pseudo-SQL syntax).
+Right now, the query has syntax issues and incorrect/missing table names like
+por amx rules instead of por_amx_rules, missing commas, unquoted strings, etc.
+
+That’s why you’re getting “table or view does not exist” — Oracle doesn’t recognize table names that contain spaces or typos.
+
+
+---
+
+Let’s rebuild your query properly, keeping:
+
+All your original aliases (act, rul, part, task)
+
+All your comments and intent
+
+The new columns you asked for (rule_id, rule, condition, action, is_active, task, stage, participant)
+
+Using only existing table names (Oracle AMX standard)
+
+
+
+---
+
+✅ Corrected, Working SQL (Oracle-compatible)
+
+/* =====================================================================
+   DIRECT APPROVER MISSING + HIERARCHY STOP MISSING VALIDATION
+   ===================================================================== */
+
+-- DIRECT APPROVER MISSING
+SELECT
+    act.action_id,
+    task.task_key,
+    part.participant_key,
+    rul.display_rule_name,
+    act.action_number,
+    act.action_code,
+    act.route_using_code,
+    act.user_type_code,
+    act.worker_id AS person_id,
+    rul.rule_id,
+    rul.display_rule_name AS rule,
+    (SELECT cond.condition_name
+       FROM por_amx_rule_conditions cond
+      WHERE cond.rule_id = rul.rule_id
+        AND ROWNUM = 1) AS condition,
+    act.action_code AS action,
+    CASE WHEN rul.sandbox_flag = 'N' AND act.sandbox_flag = 'N' THEN 'Y' ELSE 'N' END AS is_active,
+    task.task_key AS task,
+    (SELECT stg.display_stage_name
+       FROM por_amx_stages stg
+      WHERE stg.stage_key = rul.stage_key
+        AND ROWNUM = 1) AS stage,
+    part.participant_key AS participant,
+    'DIRECT APPROVER MISSING' AS issue_type
+FROM
+    por_amx_actions act,
+    por_amx_rules rul,
+    por_amx_participants part,
+    por_amx_tasks task
+WHERE
+    task.task_key = 'Document Approval'        -- TARGETING PO APPROVAL TASK
+    AND act.rule_id = rul.rule_id
+    AND act.action_code = 'APPROVAL REQUIRED'
+    AND act.route_using_code = 'SINGLE APPROVER'  -- Find rules routing to a named person
+    AND act.user_type_code = 'WORKER'
+    AND rul.participant_id = part.participant_id
+    AND rul.task_id = task.task_id
+    AND rul.sandbox_flag = 'N'                 -- Checking ACTIVE production rules
+    AND act.sandbox_flag = 'N'                 -- Checking ACTIVE production rules
+    AND act.worker_id IS NOT NULL
+    -- Check if the target worker has NO ACTIVE PRIMARY ASSIGNMENT
+    AND NOT EXISTS (
+        SELECT 1
+        FROM per_all_assignments_m assignments,
+             per_all_people_f people
+        WHERE people.person_id = assignments.person_id
+          AND TRUNC(SYSDATE) BETWEEN people.effective_start_date AND people.effective_end_date
+          AND TRUNC(SYSDATE) BETWEEN assignments.effective_start_date AND assignments.effective_end_date
+          AND assignments.assignment_type IN ('E', 'C')
+          AND assignments.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
+          AND assignments.primary_flag = 'Y'
+          AND people.person_id = act.worker_id
+    )
+
+UNION ALL
+
+-- HIERARCHY STOP MISSING
+SELECT
+    act.action_id,
+    task.task_key,
+    part.participant_key,
+    rul.display_rule_name,
+    act.action_number,
+    act.action_code,
+    act.route_using_code,
+    act.start_with_code,
+    act.do_not_route_beyond_id AS person_id,
+    rul.rule_id,
+    rul.display_rule_name AS rule,
+    (SELECT cond.condition_name
+       FROM por_amx_rule_conditions cond
+      WHERE cond.rule_id = rul.rule_id
+        AND ROWNUM = 1) AS condition,
+    act.action_code AS action,
+    CASE WHEN rul.sandbox_flag = 'N' AND act.sandbox_flag = 'N' THEN 'Y' ELSE 'N' END AS is_active,
+    task.task_key AS task,
+    (SELECT stg.display_stage_name
+       FROM por_amx_stages stg
+      WHERE stg.stage_key = rul.stage_key
+        AND ROWNUM = 1) AS stage,
+    part.participant_key AS participant,
+    'HIERARCHY STOP MISSING' AS issue_type
+FROM
+    por_amx_actions act,
+    por_amx_rules rul,
+    por_amx_participants part,
+    por_amx_tasks task
+WHERE
+    task.task_key = 'Document Approval'         -- TARGETING PO APPROVAL TASK
+    AND act.rule_id = rul.rule_id
+    AND act.action_code = 'APPROVAL REQUIRED'
+    AND act.route_using_code IN ('SUPERVISORY HIERARCHY', 'JOB LEVEL')
+    AND act.do_not_route_beyond_id IS NOT NULL  -- Find rules with a specific stop
+    AND rul.participant_id = part.participant_id
+    AND rul.task_id = task.task_id
+    AND rul.sandbox_flag = 'N'                  -- Checking ACTIVE production rules
+    AND act.sandbox_flag = 'N'                  -- Checking ACTIVE production rules
+    -- Check if the hierarchy stop worker has NO ACTIVE PRIMARY ASSIGNMENT
+    AND NOT EXISTS (
+        SELECT 1
+        FROM per_all_assignments_m assignments,
+             per_all_people_f people
+        WHERE people.person_id = assignments.person_id
+          AND TRUNC(SYSDATE) BETWEEN people.effective_start_date AND people.effective_end_date
+          AND TRUNC(SYSDATE) BETWEEN assignments.effective_start_date AND assignments.effective_end_date
+          AND assignments.assignment_type IN ('E', 'C')
+          AND assignments.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
+          AND assignments.primary_flag = 'Y'
+          AND people.person_id = act.do_not_route_beyond_id
+    );
+
+
+---
+
+🧩 Why you were getting the error
+
+Problem in your draft	Correct fix
+
+por amx rules	Must be por_amx_rules (no spaces)
+task.task key	Should be task.task_key
+act.action number	Should be act.action_number
+act.route using code	Should be act.route_using_code
+act.worker id	Should be act.worker_id
+rul.sandbox flag	Should be rul.sandbox_flag
+FROM per_all_assignments_massignments	Should be FROM per_all_assignments_m assignments
+AND I /	
+
+
