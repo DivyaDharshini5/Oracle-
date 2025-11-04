@@ -41,6 +41,7 @@ WHERE
     AND rul.sandbox_flag = 'N'
     AND act.sandbox_flag = 'N'
     AND act.worker_id IS NOT NULL
+    -- Check if the target worker has NO ACTIVE PRIMARY ASSIGNMENT
     AND NOT EXISTS (
         SELECT 1
         FROM per_all_assignments_m a
@@ -96,6 +97,7 @@ WHERE
     AND act.do_not_route_beyond_id IS NOT NULL
     AND rul.sandbox_flag = 'N'
     AND act.sandbox_flag = 'N'
+    -- Check if the hierarchy stop worker has NO ACTIVE PRIMARY ASSIGNMENT
     AND NOT EXISTS (
         SELECT 1
         FROM per_all_assignments_m a
@@ -107,4 +109,4 @@ WHERE
           AND a.assignment_type IN ('E', 'C')
           AND a.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
           AND a.primary_flag = 'Y'
-    );    );
+    );
