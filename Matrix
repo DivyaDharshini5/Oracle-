@@ -8,105 +8,39 @@ SELECT
     act.route_using_code,
     act.user_type_code,
     act.worker_id AS person_id,
-    rul.rule_id,
-    (SELECT cond.condition_name
-       FROM FUSION.POR_AMX_RULE_CONDITIONS cond
-      WHERE cond.rule_id = rul.rule_id
-        AND ROWNUM = 1) AS condition,
-    act.action_code AS action,
-    CASE
-        WHEN rul.sandbox_flag = 'N' AND act.sandbox_flag = 'N' THEN 'Y'
-        ELSE 'N'
-    END AS is_active,
-    task.task_key AS task,
-    (SELECT stg.display_stage_name
-       FROM FUSION.POR_AMX_STAGES stg
-      WHERE stg.stage_key = rul.stage_key
-        AND ROWNUM = 1) AS stage,
-    part.participant_key AS participant,
-    'DIRECT APPROVER MISSING' AS issue_type
+    'DIRECT APPROVER MISSING' AS issue_type,
+    CASE 
+        WHEN act.worker_id IS NOT NULL THEN 'N'
+        ELSE 'Y'
+    END AS is_active
 FROM
-    FUSION.POR_AMX_ACTIONS act,
-    FUSION.POR_AMX_RULES rul,
-    FUSION.POR_AMX_PARTICIPANTS part,
-    FUSION.POR_AMX_TASKS task
+    por_amx_actions act
+    JOIN por_amx_rules rul 
+        ON act.rule_id = rul.rule_id
+    JOIN por_amx_participants part 
+        ON rul.participant_id = part.participant_id
+    JOIN por_amx_tasks task 
+        ON rul.task_id = task.task_id
+    JOIN por_amx_stages stg 
+        ON stg.task_id = task.task_id   
 WHERE
-    task.task_key = 'Document Approval'
-    AND act.rule_id = rul.rule_id
-    AND act.action_code = 'Approval_required'
-    AND act.route_using_code = 'Single_approver'
+    task.task_key = 'DocumentApproval'  -- Targeting PO approval task
+    AND act.action_code = 'APPROVAL REQUIRED'
+    AND act.route_using_code = 'SINGLE APPROVER'
     AND act.user_type_code = 'WORKER'
-    AND rul.participant_id = part.participant_id
-    AND rul.task_id = task.task_id
-    AND rul.sandbox_flag = 'N'
-    AND act.sandbox_flag = 'N'
+    AND rul.sandbox_flag = 'N'  -- Active production rules
+    AND act.sandbox_flag = 'N'  -- Active production actions
     AND act.worker_id IS NOT NULL
     AND NOT EXISTS (
         SELECT 1
-        FROM FUSION.PER_ALL_ASSIGNMENTS_M assignments,
-             FUSION.PER_ALL_PEOPLE_F people
-        WHERE people.person_id = assignments.person_id
-          AND TRUNC(SYSDATE) BETWEEN people.effective_start_date AND people.effective_end_date
-          AND TRUNC(SYSDATE) BETWEEN assignments.effective_start_date AND assignments.effective_end_date
-          AND assignments.assignment_type IN ('E', 'C')
-          AND assignments.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
-          AND assignments.primary_flag = 'Y'
-          AND people.person_id = act.worker_id
-    )
-
-UNION ALL
-
-SELECT
-    act.action_id,
-    task.task_key,
-    part.participant_key,
-    rul.display_rule_name,
-    act.action_number,
-    act.action_code,
-    act.route_using_code,
-    act.start_with_code,
-    act.do_not_route_beyond_id AS person_id,
-    rul.rule_id,
-    (SELECT cond.condition_name
-       FROM FUSION.POR_AMX_RULE_CONDITIONS cond
-      WHERE cond.rule_id = rul.rule_id
-        AND ROWNUM = 1) AS condition,
-    act.action_code AS action,
-    CASE
-        WHEN rul.sandbox_flag = 'N' AND act.sandbox_flag = 'N' THEN 'Y'
-        ELSE 'N'
-    END AS is_active,
-    task.task_key AS task,
-    (SELECT stg.display_stage_name
-       FROM FUSION.POR_AMX_STAGES stg
-      WHERE stg.stage_key = rul.stage_key
-        AND ROWNUM = 1) AS stage,
-    part.participant_key AS participant,
-    'HIERARCHY STOP MISSING' AS issue_type
-FROM
-    FUSION.POR_AMX_ACTIONS act,
-    FUSION.POR_AMX_RULES rul,
-    FUSION.POR_AMX_PARTICIPANTS part,
-    FUSION.POR_AMX_TASKS task
-WHERE
-    task.task_key = 'Document Approval'
-    AND act.rule_id = rul.rule_id
-    AND act.action_code = 'Approval_required'
-    AND act.route_using_code IN ('Supervisor_hierarchy', 'Approval_group')
-    AND act.do_not_route_beyond_id IS NOT NULL
-    AND rul.participant_id = part.participant_id
-    AND rul.task_id = task.task_id
-    AND rul.sandbox_flag = 'N'
-    AND act.sandbox_flag = 'N'
-    AND NOT EXISTS (
-        SELECT 1
-        FROM FUSION.PER_ALL_ASSIGNMENTS_M assignments,
-             FUSION.PER_ALL_PEOPLE_F people
-        WHERE people.person_id = assignments.person_id
-          AND TRUNC(SYSDATE) BETWEEN people.effective_start_date AND people.effective_end_date
-          AND TRUNC(SYSDATE) BETWEEN assignments.effective_start_date AND assignments.effective_end_date
-          AND assignments.assignment_type IN ('E', 'C')
-          AND assignments.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
-          AND assignments.primary_flag = 'Y'
-          AND people.person_id = act.do_not_route_beyond_id
+        FROM per_all_assignments_m assignments
+        JOIN per_all_people_f people 
+            ON people.person_id = assignments.person_id
+        WHERE
+            TRUNC(SYSDATE) BETWEEN people.effective_start_date AND people.effective_end_date
+            AND TRUNC(SYSDATE) BETWEEN assignments.effective_start_date AND assignments.effective_end_date
+            AND assignments.assignment_type IN ('E', 'C')
+            AND assignments.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
+            AND assignments.primary_flag = 'Y'
+            AND people.person_id = act.worker_id
     );
