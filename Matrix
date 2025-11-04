@@ -1,14 +1,16 @@
 
+
 SELECT
-    rul.rule_id,
-    rul.display_rule_name AS rule,
-    rul.conditions_string AS condition,
-    act.action_code AS action,
+    rul.rule_id                              AS RULE_ID,
+    rul.display_rule_name                    AS RULE,
+    rul.conditions_string                    AS CONDITION,
+    act.action_code                          AS ACTION,
     CASE 
         WHEN EXISTS (
             SELECT 1
             FROM per_all_assignments_m a
-            JOIN per_all_people_f p ON p.person_id = a.person_id
+            JOIN per_all_people_f p 
+                ON p.person_id = a.person_id
             WHERE p.person_id = act.worker_id
               AND TRUNC(SYSDATE) BETWEEN p.effective_start_date AND p.effective_end_date
               AND TRUNC(SYSDATE) BETWEEN a.effective_start_date AND a.effective_end_date
@@ -17,10 +19,10 @@ SELECT
               AND a.primary_flag = 'Y'
         ) THEN 'Y'
         ELSE 'N'
-    END AS is_active,
-    task.task_key AS task,
-    stg.display_stage_name AS stage,
-    part.participant_key AS participant
+    END                                       AS ISACTIVE,
+    task.task_key                             AS TASK,
+    stg.stage_key                             AS STAGE,
+    part.participant_key                      AS PARTICIPANT
 FROM
     por_amx_actions act
     JOIN por_amx_rules rul 
@@ -32,18 +34,18 @@ FROM
     JOIN por_amx_stages stg 
         ON stg.task_id = task.task_id
 WHERE
-    task.task_key = 'DocumentApproval'             -- Targeting PO approval task
+    task.task_key = 'DocumentApproval'
     AND act.action_code = 'APPROVAL REQUIRED'
     AND act.route_using_code = 'SINGLE APPROVER'
     AND act.user_type_code = 'WORKER'
     AND rul.sandbox_flag = 'N'
     AND act.sandbox_flag = 'N'
     AND act.worker_id IS NOT NULL
-    -- Only show where approver has NO active primary assignment
     AND NOT EXISTS (
         SELECT 1
         FROM per_all_assignments_m a
-        JOIN per_all_people_f p ON p.person_id = a.person_id
+        JOIN per_all_people_f p 
+            ON p.person_id = a.person_id
         WHERE p.person_id = act.worker_id
           AND TRUNC(SYSDATE) BETWEEN p.effective_start_date AND p.effective_end_date
           AND TRUNC(SYSDATE) BETWEEN a.effective_start_date AND a.effective_end_date
@@ -55,15 +57,16 @@ WHERE
 UNION ALL
 
 SELECT
-    rul.rule_id,
-    rul.display_rule_name AS rule,
-    rul.conditions_string AS condition,
-    act.action_code AS action,
+    rul.rule_id                              AS RULE_ID,
+    rul.display_rule_name                    AS RULE,
+    rul.conditions_string                    AS CONDITION,
+    act.action_code                          AS ACTION,
     CASE 
         WHEN EXISTS (
             SELECT 1
             FROM per_all_assignments_m a
-            JOIN per_all_people_f p ON p.person_id = a.person_id
+            JOIN per_all_people_f p 
+                ON p.person_id = a.person_id
             WHERE p.person_id = act.do_not_route_beyond_id
               AND TRUNC(SYSDATE) BETWEEN p.effective_start_date AND p.effective_end_date
               AND TRUNC(SYSDATE) BETWEEN a.effective_start_date AND a.effective_end_date
@@ -72,10 +75,10 @@ SELECT
               AND a.primary_flag = 'Y'
         ) THEN 'Y'
         ELSE 'N'
-    END AS is_active,
-    task.task_key AS task,
-    stg.display_stage_name AS stage,
-    part.participant_key AS participant
+    END                                       AS ISACTIVE,
+    task.task_key                             AS TASK,
+    stg.stage_key                             AS STAGE,
+    part.participant_key                      AS PARTICIPANT
 FROM
     por_amx_actions act
     JOIN por_amx_rules rul 
@@ -96,11 +99,12 @@ WHERE
     AND NOT EXISTS (
         SELECT 1
         FROM per_all_assignments_m a
-        JOIN per_all_people_f p ON p.person_id = a.person_id
+        JOIN per_all_people_f p 
+            ON p.person_id = a.person_id
         WHERE p.person_id = act.do_not_route_beyond_id
           AND TRUNC(SYSDATE) BETWEEN p.effective_start_date AND p.effective_end_date
           AND TRUNC(SYSDATE) BETWEEN a.effective_start_date AND a.effective_end_date
           AND a.assignment_type IN ('E', 'C')
           AND a.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
           AND a.primary_flag = 'Y'
-    );
+    );    );
