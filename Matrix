@@ -1,3 +1,4 @@
+
 SELECT
     act.action_id,
     task.task_key,
@@ -22,25 +23,75 @@ FROM
     JOIN por_amx_tasks task 
         ON rul.task_id = task.task_id
     JOIN por_amx_stages stg 
-        ON stg.task_id = task.task_id   
+        ON stg.task_id = task.task_id  
 WHERE
-    task.task_key = 'DocumentApproval'  -- Targeting PO approval task
+    task.task_key = 'DocumentApproval'         -- Targeting PO approval task
     AND act.action_code = 'APPROVAL REQUIRED'
-    AND act.route_using_code = 'SINGLE APPROVER'
+    AND act.route_using_code = 'SINGLE APPROVER'  -- Direct approver routing
     AND act.user_type_code = 'WORKER'
-    AND rul.sandbox_flag = 'N'  -- Active production rules
-    AND act.sandbox_flag = 'N'  -- Active production actions
+    AND rul.sandbox_flag = 'N'                   -- Active rules
+    AND act.sandbox_flag = 'N'                   -- Active actions
     AND act.worker_id IS NOT NULL
+    -- Check if the target worker has NO ACTIVE PRIMARY ASSIGNMENT
     AND NOT EXISTS (
         SELECT 1
         FROM per_all_assignments_m assignments
         JOIN per_all_people_f people 
             ON people.person_id = assignments.person_id
         WHERE
-            TRUNC(SYSDATE) BETWEEN people.effective_start_date AND people.effective_end_date
+            people.person_id = act.worker_id
+            AND TRUNC(SYSDATE) BETWEEN people.effective_start_date AND people.effective_end_date
             AND TRUNC(SYSDATE) BETWEEN assignments.effective_start_date AND assignments.effective_end_date
             AND assignments.assignment_type IN ('E', 'C')
             AND assignments.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
             AND assignments.primary_flag = 'Y'
-            AND people.person_id = act.worker_id
+    )
+
+UNION ALL
+
+SELECT
+    act.action_id,
+    task.task_key,
+    part.participant_key,
+    rul.display_rule_name,
+    act.action_number,
+    act.action_code,
+    act.route_using_code,
+    act.start_with_code,
+    act.do_not_route_beyond_id AS person_id,
+    'HIERARCHY STOP MISSING' AS issue_type,
+    CASE 
+        WHEN act.do_not_route_beyond_id IS NOT NULL THEN 'N'
+        ELSE 'Y'
+    END AS is_active
+FROM
+    por_amx_actions act
+    JOIN por_amx_rules rul 
+        ON act.rule_id = rul.rule_id
+    JOIN por_amx_participants part 
+        ON rul.participant_id = part.participant_id
+    JOIN por_amx_tasks task 
+        ON rul.task_id = task.task_id
+    JOIN por_amx_stages stg 
+        ON stg.task_id = task.task_id   
+WHERE
+    task.task_key = 'DocumentApproval'          
+    AND act.action_code = 'APPROVAL REQUIRED'
+    AND act.route_using_code IN ('SUPERVISORY HIERARCHY', 'JOB LEVEL')  -- Hierarchy-based routing
+    AND act.do_not_route_beyond_id IS NOT NULL
+    AND rul.sandbox_flag = 'N'
+    AND act.sandbox_flag = 'N'
+    -- Check if the hierarchy stop worker has NO ACTIVE PRIMARY ASSIGNMENT
+    AND NOT EXISTS (
+        SELECT 1
+        FROM per_all_assignments_m assignments
+        JOIN per_all_people_f people 
+            ON people.person_id = assignments.person_id
+        WHERE
+            people.person_id = act.do_not_route_beyond_id
+            AND TRUNC(SYSDATE) BETWEEN people.effective_start_date AND people.effective_end_date
+            AND TRUNC(SYSDATE) BETWEEN assignments.effective_start_date AND assignments.effective_end_date
+            AND assignments.assignment_type IN ('E', 'C')
+            AND assignments.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
+            AND assignments.primary_flag = 'Y'
     );
