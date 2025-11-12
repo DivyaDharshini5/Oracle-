@@ -1,0 +1,56 @@
+SELECT
+    proj.segment1 AS PROJECT_NUMBER,
+    proj.name AS PROJECT_NAME,
+    NVL(proj.attribute1, 'N/A') AS PROJECT_TYPE,
+    bu.name AS PROJECT_ORG_VESSEL,
+    reg.lookup_code AS REGION,
+    TO_CHAR(proj.start_date, 'DD-MON-YYYY') AS START_DATE,
+    TO_CHAR(proj.completion_date, 'DD-MON-YYYY') AS END_DATE,
+    NVL(proj.attribute2, 'No') AS HIDE_IN_NSE,
+    proj.status_code AS STATUS,
+    NVL(bgt.latest_baselined_amount, 0) AS BUDGET_LATEST_VERSION,
+    NVL(cost.actual_cost, 0) AS COST,
+    NVL(cost.committed_cost, 0) AS COMMITTED_COST,
+    NVL(cost.total_cost, 0) AS TOTAL_COST,
+    NVL(bgt.latest_baselined_amount, 0) - NVL(cost.total_cost, 0) AS AVAILABLE_BUDGET,
+    NVL(cost.capitalized_cost, 0) AS CAPITALIZED_COST
+FROM
+    pjc_projects_all proj
+    JOIN hr_all_organization_units bu
+        ON proj.expenditure_organization_id = bu.organization_id
+    JOIN xxdpw_poml_bu_region_mapping reg
+        ON reg.business_unit_name = bu.name
+       AND reg.enabled_flag = 'Y'
+    LEFT JOIN (
+        SELECT
+            pb.project_id,
+            MAX(pb.baselined_amount) AS latest_baselined_amount
+        FROM pjc_project_budgets pb
+        WHERE pb.budget_status_code = 'BASELINED'
+        GROUP BY pb.project_id
+    ) bgt
+        ON bgt.project_id = proj.project_id
+    LEFT JOIN (
+        SELECT
+            pc.project_id,
+            SUM(pc.actual_cost) AS actual_cost,
+            SUM(pc.committed_cost) AS committed_cost,
+            SUM(pc.actual_cost + pc.committed_cost) AS total_cost,
+            SUM(pc.capitalized_cost) AS capitalized_cost
+        FROM xxdpw_poml_proj_cost_summary_v pc
+        GROUP BY pc.project_id
+    ) cost
+        ON cost.project_id = proj.project_id
+WHERE
+    ( :P_REGION IS NULL OR reg.lookup_code IN (
+        SELECT REGEXP_SUBSTR(:P_REGION, '[^,]+', 1, LEVEL)
+        FROM dual
+        CONNECT BY REGEXP_SUBSTR(:P_REGION, '[^,]+', 1, LEVEL) IS NOT NULL
+    ))
+    AND ( :P_PROJECT_TYPE IS NULL 
+          OR UPPER(proj.segment1) LIKE UPPER(:P_PROJECT_TYPE || '%') )
+    AND proj.status_code NOT IN ('CANCELLED', 'CLOSED')
+ORDER BY
+    reg.lookup_code,
+    bu.name,
+    proj.segment1;
