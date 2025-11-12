@@ -1,11 +1,13 @@
-SELECT table_name FROM all_tables WHERE table_name = 'PJF_PROJECTS_ALL_VL';
-SELECT table_name FROM all_views  WHERE table_name = 'PJF_PROJECTS_ALL_VL';
-
-SELECT table_name FROM all_tables WHERE table_name = 'PJF_PROJECT_BUDGETS_V';
-SELECT table_name FROM all_views  WHERE table_name = 'PJF_PROJECT_BUDGETS_V';
-
-SELECT table_name FROM all_tables WHERE table_name = 'XXDPW_POML_PROJ_COST_SUMMARY_V';
-SELECT table_name FROM all_views  WHERE table_name = 'XXDPW_POML_PROJ_COST_SUMMARY_V';
-
-SELECT table_name FROM all_tables WHERE table_name = 'XXDPW_POML_BU_REGION_MAPPING';
-SELECT table_name FROM all_views  WHERE table_name = 'XXDPW_POML_BU_REGION_MAPPING';
+SELECT
+    proj.project_id,
+    proj.segment1 AS PROJECT_NUMBER,
+    proj.name AS PROJECT_NAME,
+    proj.status_code AS STATUS,
+    proj.start_date,
+    proj.completion_date
+FROM
+    PJF_PROJECTS_ALL_VL proj
+WHERE
+    proj.status_code NOT IN ('CANCELLED', 'CLOSED')
+ORDER BY
+    proj.segment1;
