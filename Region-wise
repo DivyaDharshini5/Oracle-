@@ -1,19 +1,37 @@
--- 1️⃣ Check if you can see the projects view
-SELECT owner, object_name, object_type
-FROM all_objects
-WHERE object_name = 'PJF_PROJECTS_ALL_VL';
-
--- 2️⃣ Check if the region mapping table exists
-SELECT owner, object_name, object_type
-FROM all_objects
-WHERE object_name = 'XXDPW_POML_BU_REGION_MAPPING';
-
--- 3️⃣ Check if the budgets view exists
-SELECT owner, object_name, object_type
-FROM all_objects
-WHERE object_name = 'PJF_PROJECT_BUDGETS_V';
-
--- 4️⃣ Check if the cost summary view exists
-SELECT owner, object_name, object_type
-FROM all_objects
-WHERE object_name = 'XXDPW_POML_PROJ_COST_SUMMARY_V';
+SELECT
+    p.PROJECT_NUMBER,
+    p.NAME AS PROJECT_NAME,
+    ou.NAME AS BUSINESS_UNIT,
+    p.PROJECT_STATUS_CODE AS STATUS,
+    p.START_DATE,
+    p.COMPLETION_DATE AS END_DATE,
+    pv.PLAN_VERSION_ID,
+    pv.ORIGINAL_FLAG,
+    NVL(cost_data.COST, 0) AS COST,
+    NVL(cost_data.BURDENED_COST, 0) AS BURDENED_COST,
+    NVL(cost_data.CAPITALIZED_COST, 0) AS CAPITALIZED_COST,
+    NVL(cost_data.TOTAL_COST, 0) AS TOTAL_COST
+FROM
+    PJF_PROJECTS_ALL_VL p
+LEFT JOIN HR_ALL_ORGANIZATION_UNITS ou
+    ON p.ORG_ID = ou.ORGANIZATION_ID
+LEFT JOIN PJO_PLAN_VERSIONS_B pv
+    ON pv.PROJECT_ID = p.PROJECT_ID
+    AND pv.ORIGINAL_FLAG = 'Y'
+LEFT JOIN (
+    SELECT
+        PROJECT_ID,
+        SUM(NVL(PROJECT_RAW_COST, 0)) AS COST,
+        SUM(NVL(PROJECT_BURDENED_COST, 0)) AS BURDENED_COST,
+        SUM(CASE WHEN CAPITALIZED_FLAG = 'Y' THEN NVL(PROJECT_RAW_COST, 0) ELSE 0 END) AS CAPITALIZED_COST,
+        (SUM(NVL(PROJECT_RAW_COST, 0)) + SUM(NVL(PROJECT_BURDENED_COST, 0))) AS TOTAL_COST
+    FROM
+        PJC_ACCT_SWEEPER_LOGS
+    GROUP BY
+        PROJECT_ID
+) cost_data
+    ON cost_data.PROJECT_ID = p.PROJECT_ID
+WHERE
+    (UPPER(p.NAME) LIKE 'CAPEX%' OR UPPER(p.NAME) LIKE 'OPEX%')
+ORDER BY
+    p.PROJECT_NUMBER;
