@@ -1,13 +1,13 @@
 SELECT
-    proj.segment1 AS PROJECT_NUMBER,
-    proj.name AS PROJECT_NAME,
+    proj.project_number AS PROJECT_NUMBER,
+    proj.project_name AS PROJECT_NAME,
     NVL(proj.attribute1, 'N/A') AS PROJECT_TYPE,
     bu.name AS PROJECT_ORG_VESSEL,
     reg.lookup_code AS REGION,
     TO_CHAR(proj.start_date, 'DD-MON-YYYY') AS START_DATE,
     TO_CHAR(proj.completion_date, 'DD-MON-YYYY') AS END_DATE,
     NVL(proj.attribute2, 'No') AS HIDE_IN_NSE,
-    proj.status_code AS STATUS,
+    proj.project_status_code AS STATUS,
     NVL(bgt.latest_baselined_amount, 0) AS BUDGET_LATEST_VERSION,
     NVL(cost.actual_cost, 0) AS COST,
     NVL(cost.committed_cost, 0) AS COMMITTED_COST,
@@ -15,8 +15,8 @@ SELECT
     NVL(bgt.latest_baselined_amount, 0) - NVL(cost.total_cost, 0) AS AVAILABLE_BUDGET,
     NVL(cost.capitalized_cost, 0) AS CAPITALIZED_COST
 FROM
-    pjc_projects_all proj
-    JOIN hr_all_organization_units bu
+    pjf_projects_all_vl proj
+    JOIN hr_organization_units_f_v bu
         ON proj.expenditure_organization_id = bu.organization_id
     JOIN xxdpw_poml_bu_region_mapping reg
         ON reg.business_unit_name = bu.name
@@ -25,7 +25,7 @@ FROM
         SELECT
             pb.project_id,
             MAX(pb.baselined_amount) AS latest_baselined_amount
-        FROM pjc_project_budgets pb
+        FROM pjf_project_budgets_v pb
         WHERE pb.budget_status_code = 'BASELINED'
         GROUP BY pb.project_id
     ) bgt
@@ -48,9 +48,9 @@ WHERE
         CONNECT BY REGEXP_SUBSTR(:P_REGION, '[^,]+', 1, LEVEL) IS NOT NULL
     ))
     AND ( :P_PROJECT_TYPE IS NULL 
-          OR UPPER(proj.segment1) LIKE UPPER(:P_PROJECT_TYPE || '%') )
-    AND proj.status_code NOT IN ('CANCELLED', 'CLOSED')
+          OR UPPER(proj.project_number) LIKE UPPER(:P_PROJECT_TYPE || '%') )
+    AND proj.project_status_code NOT IN ('CANCELLED', 'CLOSED')
 ORDER BY
     reg.lookup_code,
     bu.name,
-    proj.segment1;
+    proj.project_number;
