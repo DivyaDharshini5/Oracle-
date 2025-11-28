@@ -1,61 +1,472 @@
-SELECT 
-  poh.PRCBUID AS Company_Code,
-  fab.BU_NAME AS PO_Company_Name,
-  poh.SEGMENT1 AS PO_Number,
-  poh.DOCUMENT_STATUS AS PO_Header_Status,
-  hp.party_name AS Vendor_Name,
-  pos.segment1 AS Vendor_Number,
-  (SELECT pex.full_name FROM PER_USERS PRU, PER_PERSON_NAMES_FV PEX 
-   WHERE PEX.PERSON_ID = PRU.PERSON_ID AND PRU.username = poh.created_by 
-   AND TRUNC(poh.creation_date) BETWEEN TRUNC(pex.effective_start_date) AND TRUNC(pex.effective_end_date)) AS PO_Created_By,
-  TO_CHAR(poh.CREATION_DATE, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS PO_Creation_Date,
-  TO_CHAR(poh.SUBMIT_DATE, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS Submit_Date,
-  poh.CURRENCY_CODE AS Currency_Code,
-  (SELECT SUM(ROUND((ROUND((UNIT_PRICE * QUANTITY),2) * NVL((SELECT rat.CONVERSION_RATE FROM GLDAILYRATES rat 
-    WHERE rat.from_currency = poh.CURRENCY_CODE AND TO_CURRENCY = 'USD' AND TO_CHAR(CONVERSION_DATE, 'MM-DD-YYYY') = TO_CHAR(poh.CREATION_DATE, 'MM-DD-YYYY') AND CONVERSION_TYPE = 'Corporate'),1)),2)) 
-   FROM PO_LINES_ALL WHERE po_header_id = poh.po_header_id) AS PO_USD_Amount,
-  CASE 
-    WHEN poapp.L5_APPROVED_BY IS NOT NULL THEN poapp.L5_APPROVED_BY
-    WHEN poapp.L4_APPROVED_BY IS NOT NULL THEN poapp.L4_APPROVED_BY
-    WHEN poapp.L3_APPROVED_BY IS NOT NULL THEN poapp.L3_APPROVED_BY
-    WHEN poapp.L2_APPROVED_BY IS NOT NULL THEN poapp.L2_APPROVED_BY
-    ELSE NULL
-  END AS Previous_Approver,
-  CASE 
-    WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
-    WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
-    WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
-    WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
-    ELSE NULL
-  END AS Approval_Date_by_Previous_Approver,
-  poapp.Note1,
-  CASE 
-    WHEN poapp.L1_APPROVED_BY IS NOT NULL THEN poapp.L1_APPROVED_BY
-    WHEN poapp.L2_APPROVED_BY IS NOT NULL THEN poapp.L2_APPROVED_BY
-    WHEN poapp.L3_APPROVED_BY IS NOT NULL THEN poapp.L3_APPROVED_BY
-    WHEN poapp.L4_APPROVED_BY IS NOT NULL THEN poapp.L4_APPROVED_BY
-    ELSE NULL
-  END AS Selected_Approver,
-  CASE 
-    WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
-    WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
-    WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
-    WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
-    ELSE NULL
-  END AS Approval_Date_by_Selected_Approver,
-  poapp.Note2,
-  (TRUNC(SYSDATE) - TRUNC(poapp.L1_APPROVED_DT)) AS Total_Days_taken_by_selected_approver,
-  (TRUNC(SYSDATE) - TRUNC(poh.SUBMIT_DATE)) AS Total_Days_Pending_from_Submission
-FROM 
-  PO_HEADERS_ALL poh,
-  PO_VENDORS pos,
-  HZ_PARTIES hp,
-  FUN_ALL_BUSINESS_UNITS_V fab,
-  PO_APPROVAL poapp
-WHERE 
-  poh.VENDOR_ID = pos.vendor_id
-  AND hp.party_id = pos.party_id
-  AND fab.BU_ID = poh.PRCBUID
-  AND poh.po_header_id = poapp.po_header_id(+)
-  AND poh.PRCBUID = poapp.PRC_BU_ID(+)
-  AND poh.SEGMENT1 = poapp.segment1(+);
+WITH PO PENDING AS
+
+select poh.poheaderid,poh.segmenti,poh.PRCBUID,
+
+new7
+
+TO CHAR(wi.ASSIGNEDDATE, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') ASSIGNEDDATE,
+
+wf.ASSIGNEES
+
+,case when state ='INFO REQUESTED' then
+
+wf.UPDATEDBYDISPLAYNAME || Informartion Requested to '11wf.ASSIGNEESDISPLAYNAME
+
+ELSE
+
+wf.ASSIGNEESDISPLAYNAME
+
+END ASSIGNEESDISPLAYNAME
+
+wf.APPROVERS,
+
+wf.outcome, wf.state,
+
+wf.workflowpattern, wf.title, wf.component.name, wf.compositename, POH.SUBMIT DATE
+
+(trunc (sysdate)- trunc (wf.ASSIGNEDDATE))+1 PENDING DAYS_APPROVE
+
+(trunc (sysdate)-trunc (POH.SUBMIT DATE))+1 TOTAL _DAYS
+
+from
+
+po versions pov, PO headers all poh, fa fusion soainfra.wftask wf, FUN ALL BUSINESS UNITS V fab
+
+where pov.po header id poh.po header id
+
+and pov.change order status = 'PENDING APPROVAL' and pov.approvalinstanceid=wf.compositeinstanceid
+
+I
+
+---and poh.segment1 in ('POMLDMSW000229', 'POMLSARL000239')
+
+and state in ('ASSIGNED', 'INFO REQUESTED')
+
+and assignees is not null
+
+--and poh.segment1='POMLDMSW000237'
+
+and workflowpattern not in ('AGGREGATION', 'FYI')
+
+and componentname='DocumentApproval'
+
+AND trunc (POH.CREATIONDATE) BETWEEN START DATE PO AND END DATEPO
+
+AND fab. BU ID Poh.PRC BU ID
+
+)
+
+AND fab. BU NAME=nv1 (:PCOMPANY NAME, fab.BUNAME))
+PO REJECT AS
+
+select * from (
+
+select pha.poheaderid,pha.prcbuid,pha.segment1
+
+ppnfv.full name
+
+REJECTED BY
+
+,replace (replace (replace (replace (Rtrim(to_char (PATC.USER COMMENT)),',', TO CHAR (pah.ACTION DATE, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') REJECTIED DATE,pah.ACTION CODE
+
+from po action history pah
+
+PO headers all pha
+
+per person names fv ppnfv
+
+POR APPROVAL TASK COMMENTS PATC
+
+FUN ALL BUSINESS UNITS V fab
+
+where pha.po header id pah.object id
+
+and PATC.object id (+)= pah.object_id
+
+and PATC. PERFORMER ID (+) = pah. PERFORMER ID
+
+and PATC.IDENTIFICATION KEY (+) pah. IDENTIFICATION KEY
+
+and nvl (PATCVOBJECT SUB TYPE CODE, 'STANDARD') IN ('STANDARD', 'BLANKET','
+
+and nvl (PATC.OBJECT TYPE CODE, 'PO') in ('PO', 'PA')
+
+and nvl (pha.type lookup code, 'STANDARD') IN ('STANDARD', 'BLANKET', 'CONTH
+
+and pah.performer id ppnfv.person_id (+)
+
+and pah.objectsubtype_code IN ('STANDARD', 'BLANKET', 'CONTRACT')
+
+and pah.object type code in ('PO', 'PA')
+
+AND trunc (pha.CREATION DATE) BETWEEN nvl(:START DATE PO, trunc (pha.CREATI
+
+AND fab.BU ID PHA. PRC BU ID
+
+AND fab. BU NAME=nvl(:P COMPANY NAME, fab. BU NAME)
+
+and pah.ACTION CODE REJECT
+
+AND pha. DOCUMENT STATUS='REJECTED'
+
+and pah.performer id is not null))
+PO APPROVAL AS
+
+(select PO HEADER ID, PRC BU ID, segment1
+
+B
+
+L1 ANM LI APPROVED BY, L1 A NTE Notel, L1 A DT LI APPROVED DT--SUBSTR(LI ANTE,1,LENGTH(LI ANTE)-1
+
+L2 ANM L2 APPROVED BY, L2 A NTE Note2, L2 A DT 12 APPROVED DT
+
+L3 ANM L3 APPROVED BY, L2 A NTE Note3, L3 A DT L3 APPROVED DT L4 ANM L4 APPROVED BY, L2 A NTE Note4, 14 A DT 14 APPROVED DT
+
+from
+
+15 ANM L5 APPROVED BY, L2 A NTE Note5, 15 A DT L5 APPROVED DT
+
+select * from (
+
+select pha.po headerid, pha. FRCBU_ID, pha.segment1
+
+ppnfv.DISPLAY NAME
+
+APPROVER
+
+tochar (replace (replace (replace (Rtrim(sys.stragg(distinct PATC.USER COMMENT (( ,ייווי ,replace (replace(tochar(PATC.USER_COMMENT), chr(9),''),chr(10),'") A NOTE
+
+TO CHAR (pah. ACTION DATE, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') APPROVED DT
+
+--,pah.sequence num
+
+rownumber() over (partition by pha.poheaderid order by pha.poheader_id,pah.sequence num) I
+
+from po action history pah
+
+PO headers all pha
+
+per person names fv ppnfv
+
+POR APPROVAL TASK COMMENTS PATC
+
+FUN ALL BUSINESS UNITS V fab
+
+where pha.po header id pah.object_id
+
+and PATC.objectid(+) pah.objectid
+
+and PATC. PERFORMER ID (+) pah. PERFORMER ID and PATC.IDENTIFICATION KEY (+) = pah. IDENTIFICATION KEY
+and PATC.object_id(+) pah.object id
+
+and PATC. PERFORMER ID (+) pah. PERFORMER ID
+
+and PATC. IDENTIFICATION KEY (+) pah, IDENTIFICATION KEY
+
+and PATC.OBJECT SUBTYPECODE (+) IN ('STANDARD', 'BLANKET, CONTRACT) and PATC.OBJECT TYPE CODE (+) in (PO', 'PA')
+
+and pha.type lookup code IN (STANDARD', 'BLANKET', 'CONTRACT')
+
+and pah.performer id ppnfv.person id
+
+and pah.object sub type code IN ('STANDARD', 'BLANKET', 'CONTRACT')
+
+and pah.objecttypecode in ('PO', 'PA')
+
+and pah.action code 'APPROVE
+
+and pah.performer id is not null
+
+AND pha. DOCUMENT STATUS NOT IN ('WITHDRAWN, PENDING APPROVAL)
+
+AND trunc (pha.CREATION DATE) BETWEEN nvl(:START DATE PO, trunc (pha.CREATION DATE)) AND AND fab. BU ID PHA.PRC BU ID
+
+AND fab.BU_NAME=nvl(:P COMPANY NAME, fab. BU NAME)
+
+union all
+
+I
+
+SELECT distinct pha.poheaderid
+
+PO HDR, pha. PRC BU ID, pha.segment1,
+
+AMERICAN') APPROVED DT, fwh.ASSIGNEESDISPLAYNAME APPROVER, replace (replace(fwc.wfcomment,chr(9),''),chr(10),'") wicomment, TO CHAR(fwh.ASSIGNEDDATE, 'DD.MM.YYYY', 'NLS DATE LANGUAGE row number() over (partition by pha.poheaderid order by pha.po_header id, rownum) Ivi
+
+FROM
+
+PO headers all pha,
+
+PO VERSIONS POV,
+
+FA FUSION SOAINFRA.WFTASKHISTORY fwh, fa fusion soainfra.wfcomments fwc,
+
+FUN ALL BUSINESS UNITS V fab,
+
+fa fusion soainfra.wftask fwt
+where
+
+pov.po_header id pha po header id
+
+日
+
+AND fwh.ASSIGNEESDISPLAYNAME IS NOT NULL
+
+and fwh.compositeinstanceid pov.approvalinstanceid
+
+and fwh.state='OUTCOME UPDATED
+
+and fwh.TASKDEFINITIONNAME="Document Approval
+
+and fwh.OUTCOME'APPROVE
+
+AND fwt.taskid fwh.taskid
+
+AND fwh.taskid fwc.taskid (+)
+
+AND pha. DOCUMENT STATUS PENDING APPROVAL
+
+AND trunc (pha.CREATION DATE) BETWEEN nvl(:START DATE_PO, trune (pha. CREATION DATE)) AND nvl(:
+
+AND fab. BU ID PHA. PRC BU ID
+
+AND fab. BU NAME=nvl(:P COMPANY NAME, fab. BU NAME)
+
+and fwh.UPDATEDBY <<>> 'workflowaystem'
+
+AND pha. DOCUMENT STATUSPENDING APPROVAL!
+
+)
+
+I
+
+PIVOT (max (APPROVER) ANM
+
+max (to char (A NOTE)) ANTE
+
+,max (APPROVED DT) A DT
+
+for 1v1 IN (1 AS L1,2 AS L2,3 AS 13,4 AS 14,5 AS L5))
+
+3
+
+SELECT
+
+TO CHAR (POH.CREATION DATE, 'DD.MM. YYYY', 'NLS DATE LANGUAGE AMERICAN) CREATION DATE, POH. PRC BU 1
+
+poh. PO HEADER ID,
+
+POH.SEGMENTI PO NUMBER, pol.attribute14 VESSAL NAME,
+
+(Select SUM (round((round((UNIT PRICE QUANTITY),2)
+
+*nvl((SELECT
+
+rat.CONVERSION RATE
+
+FROM
+
+gldailyrates rat
+
+WHERE
+
+rat.from currency POH.CURRENCY CODE
+
+and TO CURRENCY = 'USD'
+
+AND TO CHAR (CONVERSION DATE, 'MM-DD-YYYY') =TO_CHAR(POH.CREATION DATE, 'MM-DD-YYYY')
+
+AND CONVERSION_TYPE = Corporate'),1)),2))
+
+from po lines all
+
+where po header id=poh.po header id) PO USD AMOUNT,
+
+TO CHAR (POH. SUBMIT DATE, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') SUBMIT DATE,
+
+POH. DOCUMENT STATUS AS PO HEADER STATUS, POH.created by AS PO CREATED BY,
+
+TO CHAR (POH.CREATION DATE, 'DD.MM.YYYY', 'NLS DATE LANGUAGE-AMERICAN') AS PO CREATION DATE,
+
+(SELECT pex.full name
+
+FROM PER USERS PRU
+
+PER PERSON NAMES FV PEX
+
+WHERE 1=1
+
+AND PEX.PERSON ID-PRU.PERSON ID
+
+AND PRU.username poh.created by
+
+AND trunc (poh.creation_date) between trunc(pex.effective start date) and trunc (pex.effective
+
+poapp. L1 APPROVED BY, poapp. Notel, poapp.L1APPROVEDDT,
+
+poapp. L2 APPROVED BY, poapp. Note2, poapp.L2APPROVEDDT,
+
+poapp.L3 APPROVED BY, poapp. Note3, poapp.L3_APPROVED DT,
+
+poapp. L4 APPROVED BY, poapp. Note4, poapp. L4 APPROVED DT,
+when poapp. L4 APPROVED BY is not null then poapp. 14 APPROVED BY
+
+when poapp.L3 APPROVED BY is not null then poapp. L3_APPROVED BY
+
+when poapp.L2 APPROVED BY is not null then poapp. L2 APPROVED BY
+
+when poapp.L1_APPROVED BY is not null then poapp. L1 APPROVED BY end as SELECTED APPROVER,
+
+case
+
+when poapp.L5_APPROVED DT is not null then poapp. L5 APPROVED DT
+
+when poapp.L4APPROVED DT is not null then poapp. L4 APPROVED DT when poapp.L3_APPROVED DT is not null then poapp. L3 APPROVED DT
+
+when poapp. L2 APPROVED DT is not null then poapp. L2 APPROVED DT
+
+when poapp. L1 APPROVED DT is not null then poapp. L1 APPROVED DT end as APPROVAL DATA BY SELECTED APPROVER,
+
+case
+
+when poapp.L5_APPROVED BY is not null then poapp. L5 APPROVED BY
+
+when poapp.L4 APPROVED BY is not null then poapp. L4 APPROVED BY
+
+when poapp. L3 APPROVED BY is not null then poapp. L3 APPROVED BY
+
+when poapp. L2 APPROVED BY is not null then poapp. L2 APPROVED BY
+
+else null
+
+end as PREVIOUS APPROVER,
+
+case
+
+when poapp. L5 APPROVED DT is not null then poapp. L5 APPROVED DT when poapp. L4 APPROVED DT is not null then poapp. L4_APPROVED DT
+
+when poapp. L3 APPROVED DT is not null then poapp. L3 APPROVED DT
+
+when poapp. L2 APPROVED DT is not null then poapp. L2_APPROVED DT
+
+else null
+
+end as APPROVAL DATA BY PREVIOUS APPROVER,
+(
+poapp. L2 APPROVED DT,
+
+B
+
+new
+
+poapp.L1APPROVEDDT
+
+),
+
+'DD.MM.YYYY'
+
+)
+
+
+)-TRUNC(POH.SUBMIT_DATE)) /*(
+
+AS TOTALDAYSPENDINGFROMSUBMISSION,
+PO PENDING POPEN
+
+WHERE 1=1
+
+AND poh.type lookup code IN ('STANDARD', 'BLANKET', 'CONTRACT')
+
+AND poh.po header id=pol.po header id
+
+AND pol.line num-1
+
+AND pos.vendorid=poh.vendorid
+
+AND hp.party id=pos.party_id
+
+AND pol.po line id pod.po line id
+
+AND pol.po header id-pod.po header id
+
+AND POH.DOCUMENT STATUS NOT IN ('CANCELED', 'INCOMPLETE')
+
+/and Pod. PO DISTRIBUTION ID(SELECT max (PO DISTRIBUTIONID) from PO DISTRIBUTIONS ALL where po line id-pol.po line id and poheaderid=pol.poheader_id) /
+
+AND pod.distribution_num=1
+
+new
+
+AND pod.code combination id-gcc.code combination id
+
+AND fab.BU ID POH. PRC BU ID
+
+AND TRUNC(SYSDATE) BETWEEN fab. DATE FROM(+) AND TO CHAR (NVL (fab. DATE TO (+), '4712/12/31'), 'YYYY/MM/DD
+
+AND pos.segment1 nvl(:PVENDORNUM,pos.segment1)
+
+AND hp.party name nvl(:P VENDOR NAME,hp.party_name)
+
+AND fab. BU NAME-nvl(:P COMPANY NAME, fab. BU NAME)
+
+AND POH. DOCUMENT STATUS nvl(:PPOSTATUS, POH. DOCUMENT STATUS)
+
+--AND GCC.SEGMENT1-nvl(:PO COMPANY NO, gac.segment1)
+
+AND POH.AGENT ID PPNFV. PERSON ID (+)
+
+trunc (poh.creation date) between trunc (PPNFV. EFFECTIVE START DATE(+)) and trunc (PPNFV.EFFECTIVE E
+
+and AND trunc (POH.CREATION DATE) BETWEEN START DATE PO AND END DATE PO
+
+AND POAPP.po header id(+)=poh.poheaderid
+
+AND poapp. PRC BU ID(+)=poh.PRCBUID
+
+AND poapp.segment1 (+)=poh.segment1
+
+AND POREJ.po header id (+)=poh.po header id
+AND POREJ.PRC BU ID(+)=poh.PRC BU ID
+
+AND POREJ.segment1(+)=poh.segment1
+
+AND POPEN.poheaderid(+)=poh.poheaderid
+
+AND POPEN.PRC BU ID(+)=poh.PRC BU ID
+
+3
+
+AND POPEN.segment1(+)=poh.segment1
+Use this code but I want the columns I just mentioned remove the columns which not mentioned
+Selected Approver
+
+Company Code
+
+. PO Company Name
+PO Number
+PO Header Status
+
+Vendor Name
+
+Vendor Number
+
+PO Created By
+
+PO Creation Date
+
+Submit Date
+
+Currency Code
+
+PO Amount
+
+PO Usd Amount
+
+Previous Approver
+Approval Date by Previous Approver
+Note1
+Approval date by "Selected Approver"
+Note2
+Total Days pending from Previous Approver
+Total Days taken by selected approver
+Total Days Pending from Submission
