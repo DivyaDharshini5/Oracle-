@@ -1,59 +1,22 @@
-WITH PO_PENDING AS (
-    SELECT
-        poh.po_header_id,
-        poh.segment1 AS po_number,
-        wf.approver_name AS selected_approver,
-        TO_CHAR(wf.action_date, 'DD.MM.YYYY') AS submit_date,
-        (TRUNC(SYSDATE) - TRUNC(wf.action_date)) AS total_days_pending_from_submission
-    FROM
-        POR_HEADERS_V poh
-        JOIN POR_DOC_HEADER_HISTORY_V pov ON poh.po_header_id = pov.po_header_id
-        JOIN FND_WF_APPROVAL_HISTORY_V wf ON pov.approval_instance_id = wf.workflow_id
-    WHERE
-        wf.action_type IN ('PENDING', 'INFO_REQUESTED')
-),
-
-PO_APPROVAL AS (
-    SELECT
-        pa.po_header_id,
-        pa.approver_name AS previous_approver,
-        TO_CHAR(pa.action_date, 'DD.MM.YYYY') AS approval_date_prev_approver,
-        pa.comments AS note1,
-        ROW_NUMBER() OVER (PARTITION BY pa.po_header_id ORDER BY pa.sequence DESC) AS rn
-    FROM
-        POR_DOC_APPROVAL_HISTORY_V pa
-    WHERE
-        pa.action_type = 'APPROVED'
-),
-
-PO_MAIN AS (
-    SELECT
-        poh.po_header_id,
-        fab.bu_name AS po_company_name,
-        poh.segment1 AS po_number,
-        poh.document_status AS po_header_status,
-        sup.vendor_name,
-        sup.vendor_number,
-        TO_CHAR(poh.creation_date, 'DD.MM.YYYY') AS po_creation_date,
-        poh.created_by,
-        poh.currency_code,
-        poh.total_amount AS po_amount,
-        poh.total_amount_usd AS po_usd_amount
-    FROM
-        POR_HEADERS_V poh
-        JOIN POS_SUPPLIERS_V sup ON poh.vendor_id = sup.vendor_id
-        JOIN FND_FLEX_VALUES_VSET fab ON fab.flex_value_set_id = poh.business_unit_id
-)
-
 SELECT
-    pm.*,
-    pa.previous_approver,
-    pa.approval_date_prev_approver,
-    pa.note1,
-    pp.selected_approver,
-    pp.submit_date AS approval_date_selected_approver,
-    pp.total_days_pending_from_submission
+    poh.rcv_transaction_id AS "PO HEADER ID",
+    poh.segment1 AS "PO Number",
+    poh.currency_code AS "Currency",
+    poh.creation_date AS "PO Creation Date",
+    bu.name AS "Company Name",
+    sup.vendor_name AS "Vendor Name",
+    wf.approver_name AS "Selected Approver",
+    wf.action_date AS "Approval Date",
+    wf.action_type AS "Approval Status",
+    wf.comments AS "Note"
 FROM
-    PO_MAIN pm
-    LEFT JOIN PO_PENDING pp ON pm.po_header_id = pp.po_header_id
-    LEFT JOIN PO_APPROVAL pa ON pm.po_header_id = pa.po_header_id AND pa.rn = 1;
+    Fusion.Procurement.POR_HEADERS_RFQ_V poh  -- Replace based on available VO
+    LEFT JOIN Fusion.Setup.FUN_ALL_BUSINESS_UNITS_V bu
+        ON bu.bu_id = poh.prc_bu_id
+    LEFT JOIN Fusion.Supplier.POS_SUPPLIERS_V sup
+        ON sup.vendor_id = poh.vendor_id
+    LEFT JOIN Fusion.Workflow.FND_WF_APPROVAL_HISTORY_V wf
+        ON wf.document_id = poh.po_header_id
+WHERE
+    poh.creation_date >= :P_START_DATE
+    AND poh.creation_date <= :P_END_DATE
