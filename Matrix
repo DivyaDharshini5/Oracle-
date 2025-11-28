@@ -14,19 +14,19 @@ SELECT
     poh.currency_code AS currency_code,
     
     -- Amounts
-    (SELECT SUM(ROUND(unit_price * quantity,2))
-     FROM po_lines_all pol
+    (SELECT SUM(ROUND(pol.unit_price * pol.quantity,2))
+     FROM fusion.po_lines_all pol
      WHERE pol.po_header_id = poh.po_header_id) AS po_amount,
      
     (SELECT SUM(ROUND(
-        ROUND(unit_price * quantity,2) *
+        ROUND(pol.unit_price * pol.quantity,2) *
         NVL((SELECT rat.conversion_rate
-             FROM gldailyrates rat
+             FROM fusion.gl_dailyrates rat
              WHERE rat.from_currency = poh.currency_code
                AND rat.to_currency = 'USD'
                AND TO_CHAR(rat.conversion_date,'MM-DD-YYYY') = TO_CHAR(poh.creation_date,'MM-DD-YYYY')
                AND rat.conversion_type = 'Corporate'),1),2))
-     FROM po_lines_all pol
+     FROM fusion.po_lines_all pol
      WHERE pol.po_header_id = poh.po_header_id) AS po_usd_amount,
      
     -- Approval Info
@@ -68,13 +68,14 @@ SELECT
     (TRUNC(poapp.l1_approved_dt) - TRUNC(poh.submit_date)) AS total_days_taken_by_selected_approver,
     (TRUNC(SYSDATE) - TRUNC(poh.submit_date)) AS total_days_pending_from_submission
     
-FROM po_headers_all poh
-     JOIN po_lines_all pol ON poh.po_header_id = pol.po_header_id
-     JOIN po_vendors pos ON pos.vendor_id = poh.vendor_id
-     JOIN hz_parties hp ON hp.party_id = pos.party_id
-     JOIN po_distributions_all pod ON pol.po_line_id = pod.po_line_id
-     JOIN gl_code_combinations gcc ON pod.code_combination_id = gcc.code_combination_id
-     JOIN fun_all_business_units_v fab ON fab.bu_id = poh.prc_bu_id
+FROM fusion.po_headers_all poh
+     JOIN fusion.po_vendors pos ON pos.vendor_id = poh.vendor_id
+     JOIN fusion.hz_parties hp ON hp.party_id = pos.party_id
+     JOIN fusion.po_distributions_all pod ON poh.po_header_id = pod.po_header_id
+     JOIN fusion.gl_code_combinations gcc ON pod.code_combination_id = gcc.code_combination_id
+     JOIN fusion.fun_all_business_units_v fab ON fab.bu_id = poh.prc_bu_id
+     LEFT JOIN fusion.per_person_names_fv ppnfv ON poh.agent_id = ppnfv.person_id
+     LEFT JOIN fusion.per_users pru ON pru.username = poh.created_by
      LEFT JOIN poapp ON poapp.po_header_id = poh.po_header_id
      LEFT JOIN porej ON porej.po_header_id = poh.po_header_id
      LEFT JOIN popen ON popen.po_header_id = poh.po_header_id
