@@ -1,112 +1,81 @@
-
-
 SELECT
-    rul.rule_id                              AS RULE_ID,
-    rul.display_rule_name                    AS RULE,
-    rul.conditions_string                    AS CONDITION,
-    act.action_code                          AS ACTION,
-    CASE 
-        WHEN EXISTS (
-            SELECT 1
-            FROM per_all_assignments_m a
-            JOIN per_all_people_f p 
-                ON p.person_id = a.person_id
-            WHERE p.person_id = act.worker_id
-              AND TRUNC(SYSDATE) BETWEEN p.effective_start_date AND p.effective_end_date
-              AND TRUNC(SYSDATE) BETWEEN a.effective_start_date AND a.effective_end_date
-              AND a.assignment_type IN ('E', 'C')
-              AND a.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
-              AND a.primary_flag = 'Y'
-        ) THEN 'Y'
-        ELSE 'N'
-    END                                       AS ISACTIVE,
-    task.task_key                             AS TASK,
-    stg.stage_key                             AS STAGE,
-    part.participant_key                      AS PARTICIPANT
-FROM
-    por_amx_actions act
-    JOIN por_amx_rules rul 
-        ON act.rule_id = rul.rule_id
-    JOIN por_amx_participants part 
-        ON rul.participant_id = part.participant_id
-    JOIN por_amx_tasks task 
-        ON rul.task_id = task.task_id
-    JOIN por_amx_stages stg 
-        ON stg.task_id = task.task_id
-WHERE
-    task.task_key = 'DocumentApproval'
-    AND act.action_code = 'APPROVAL REQUIRED'
-    AND act.route_using_code = 'SINGLE APPROVER'
-    AND act.user_type_code = 'WORKER'
-    AND rul.sandbox_flag = 'N'
-    AND act.sandbox_flag = 'N'
-    AND act.worker_id IS NOT NULL
-    -- Check if the target worker has NO ACTIVE PRIMARY ASSIGNMENT
-    AND NOT EXISTS (
-        SELECT 1
-        FROM per_all_assignments_m a
-        JOIN per_all_people_f p 
-            ON p.person_id = a.person_id
-        WHERE p.person_id = act.worker_id
-          AND TRUNC(SYSDATE) BETWEEN p.effective_start_date AND p.effective_end_date
-          AND TRUNC(SYSDATE) BETWEEN a.effective_start_date AND a.effective_end_date
-          AND a.assignment_type IN ('E', 'C')
-          AND a.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
-          AND a.primary_flag = 'Y'
-    )
-
-UNION ALL
-
-SELECT
-    rul.rule_id                              AS RULE_ID,
-    rul.display_rule_name                    AS RULE,
-    rul.conditions_string                    AS CONDITION,
-    act.action_code                          AS ACTION,
-    CASE 
-        WHEN EXISTS (
-            SELECT 1
-            FROM per_all_assignments_m a
-            JOIN per_all_people_f p 
-                ON p.person_id = a.person_id
-            WHERE p.person_id = act.do_not_route_beyond_id
-              AND TRUNC(SYSDATE) BETWEEN p.effective_start_date AND p.effective_end_date
-              AND TRUNC(SYSDATE) BETWEEN a.effective_start_date AND a.effective_end_date
-              AND a.assignment_type IN ('E', 'C')
-              AND a.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
-              AND a.primary_flag = 'Y'
-        ) THEN 'Y'
-        ELSE 'N'
-    END                                       AS ISACTIVE,
-    task.task_key                             AS TASK,
-    stg.stage_key                             AS STAGE,
-    part.participant_key                      AS PARTICIPANT
-FROM
-    por_amx_actions act
-    JOIN por_amx_rules rul 
-        ON act.rule_id = rul.rule_id
-    JOIN por_amx_participants part 
-        ON rul.participant_id = part.participant_id
-    JOIN por_amx_tasks task 
-        ON rul.task_id = task.task_id
-    JOIN por_amx_stages stg 
-        ON stg.task_id = task.task_id
-WHERE
-    task.task_key = 'DocumentApproval'
-    AND act.action_code = 'APPROVAL REQUIRED'
-    AND act.route_using_code IN ('SUPERVISORY HIERARCHY', 'JOB LEVEL')
-    AND act.do_not_route_beyond_id IS NOT NULL
-    AND rul.sandbox_flag = 'N'
-    AND act.sandbox_flag = 'N'
-    -- Check if the hierarchy stop worker has NO ACTIVE PRIMARY ASSIGNMENT
-    AND NOT EXISTS (
-        SELECT 1
-        FROM per_all_assignments_m a
-        JOIN per_all_people_f p 
-            ON p.person_id = a.person_id
-        WHERE p.person_id = act.do_not_route_beyond_id
-          AND TRUNC(SYSDATE) BETWEEN p.effective_start_date AND p.effective_end_date
-          AND TRUNC(SYSDATE) BETWEEN a.effective_start_date AND a.effective_end_date
-          AND a.assignment_type IN ('E', 'C')
-          AND a.assignment_status_type IN ('ACTIVE', 'SUSPENDED')
-          AND a.primary_flag = 'Y'
-    );
+    -- Company Info
+    gcc.segment1 AS company_code,
+    fab.bu_name  AS po_company_name,
+    
+    -- PO Header Info
+    poh.segment1 AS po_number,
+    poh.document_status AS po_header_status,
+    hp.party_name AS vendor_name,
+    pos.segment1 AS vendor_number,
+    poh.created_by AS po_created_by,
+    TO_CHAR(poh.creation_date, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS po_creation_date,
+    TO_CHAR(poh.submit_date, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS submit_date,
+    poh.currency_code AS currency_code,
+    
+    -- Amounts
+    (SELECT SUM(ROUND(unit_price * quantity,2))
+     FROM po_lines_all pol
+     WHERE pol.po_header_id = poh.po_header_id) AS po_amount,
+     
+    (SELECT SUM(ROUND(
+        ROUND(unit_price * quantity,2) *
+        NVL((SELECT rat.conversion_rate
+             FROM gldailyrates rat
+             WHERE rat.from_currency = poh.currency_code
+               AND rat.to_currency = 'USD'
+               AND TO_CHAR(rat.conversion_date,'MM-DD-YYYY') = TO_CHAR(poh.creation_date,'MM-DD-YYYY')
+               AND rat.conversion_type = 'Corporate'),1),2))
+     FROM po_lines_all pol
+     WHERE pol.po_header_id = poh.po_header_id) AS po_usd_amount,
+     
+    -- Approval Info
+    CASE
+        WHEN poapp.l4_approved_by IS NOT NULL THEN poapp.l4_approved_by
+        WHEN poapp.l3_approved_by IS NOT NULL THEN poapp.l3_approved_by
+        WHEN poapp.l2_approved_by IS NOT NULL THEN poapp.l2_approved_by
+        WHEN poapp.l1_approved_by IS NOT NULL THEN poapp.l1_approved_by
+    END AS selected_approver,
+    
+    CASE
+        WHEN poapp.l5_approved_by IS NOT NULL THEN poapp.l5_approved_by
+        WHEN poapp.l4_approved_by IS NOT NULL THEN poapp.l4_approved_by
+        WHEN poapp.l3_approved_by IS NOT NULL THEN poapp.l3_approved_by
+        WHEN poapp.l2_approved_by IS NOT NULL THEN poapp.l2_approved_by
+        ELSE NULL
+    END AS previous_approver,
+    
+    CASE
+        WHEN poapp.l5_approved_dt IS NOT NULL THEN poapp.l5_approved_dt
+        WHEN poapp.l4_approved_dt IS NOT NULL THEN poapp.l4_approved_dt
+        WHEN poapp.l3_approved_dt IS NOT NULL THEN poapp.l3_approved_dt
+        WHEN poapp.l2_approved_dt IS NOT NULL THEN poapp.l2_approved_dt
+        ELSE NULL
+    END AS approval_date_by_previous_approver,
+    
+    poapp.note1,
+    CASE
+        WHEN poapp.l5_approved_dt IS NOT NULL THEN poapp.l5_approved_dt
+        WHEN poapp.l4_approved_dt IS NOT NULL THEN poapp.l4_approved_dt
+        WHEN poapp.l3_approved_dt IS NOT NULL THEN poapp.l3_approved_dt
+        WHEN poapp.l2_approved_dt IS NOT NULL THEN poapp.l2_approved_dt
+        WHEN poapp.l1_approved_dt IS NOT NULL THEN poapp.l1_approved_dt
+    END AS approval_date_by_selected_approver,
+    poapp.note2,
+    
+    -- Timing Metrics
+    (TRUNC(poapp.l2_approved_dt) - TRUNC(poapp.l1_approved_dt)) AS total_days_pending_from_previous_approver,
+    (TRUNC(poapp.l1_approved_dt) - TRUNC(poh.submit_date)) AS total_days_taken_by_selected_approver,
+    (TRUNC(SYSDATE) - TRUNC(poh.submit_date)) AS total_days_pending_from_submission
+    
+FROM po_headers_all poh
+     JOIN po_lines_all pol ON poh.po_header_id = pol.po_header_id
+     JOIN po_vendors pos ON pos.vendor_id = poh.vendor_id
+     JOIN hz_parties hp ON hp.party_id = pos.party_id
+     JOIN po_distributions_all pod ON pol.po_line_id = pod.po_line_id
+     JOIN gl_code_combinations gcc ON pod.code_combination_id = gcc.code_combination_id
+     JOIN fun_all_business_units_v fab ON fab.bu_id = poh.prc_bu_id
+     LEFT JOIN poapp ON poapp.po_header_id = poh.po_header_id
+     LEFT JOIN porej ON porej.po_header_id = poh.po_header_id
+     LEFT JOIN popen ON popen.po_header_id = poh.po_header_id
+WHERE poh.document_status NOT IN ('CANCELED','INCOMPLETE');
