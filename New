@@ -1,11 +1,11 @@
 WITH PO_PENDING AS (
-    -- your original PO_PENDING CTE (unchanged)
+    -- original PO_PENDING CTE
 ),
 PO_REJECT AS (
-    -- your original PO_REJECT CTE (unchanged)
+    -- original PO_REJECT CTE
 ),
 PO_APPROVAL AS (
-    -- your original PO_APPROVAL CTE (unchanged)
+    -- original PO_APPROVAL CTE
 )
 SELECT
     -- Selected Approver
@@ -16,7 +16,6 @@ SELECT
         WHEN poapp.L2_APPROVED_BY IS NOT NULL THEN poapp.L2_APPROVED_BY
         WHEN poapp.L1_APPROVED_BY IS NOT NULL THEN poapp.L1_APPROVED_BY
     END AS Selected_Approver,
-
     fab.BU_ID AS Company_Code,
     fab.BU_NAME AS PO_Company_Name,
     poh.SEGMENT1 AS PO_Number,
@@ -27,12 +26,9 @@ SELECT
     TO_CHAR(poh.CREATION_DATE,'DD.MM.YYYY') AS PO_Creation_Date,
     TO_CHAR(poh.SUBMIT_DATE,'DD.MM.YYYY') AS Submit_Date,
     poh.CURRENCY_CODE AS Currency_Code,
-
-    -- PO Amounts
     (SELECT SUM(ROUND(unit_price*quantity,2))
      FROM PO_LINES_ALL pol
      WHERE pol.po_header_id = poh.po_header_id) AS PO_Amount,
-
     (SELECT SUM(ROUND((unit_price*quantity) *
         NVL((SELECT rat.CONVERSION_RATE
              FROM GL_DAILY_RATES rat
@@ -42,25 +38,20 @@ SELECT
                AND rat.CONVERSION_DATE = TRUNC(poh.CREATION_DATE)),1),2))
      FROM PO_LINES_ALL pol
      WHERE pol.po_header_id = poh.po_header_id) AS PO_USD_Amount,
-
-    -- Previous Approver
     CASE
         WHEN poapp.L5_APPROVED_BY IS NOT NULL THEN poapp.L4_APPROVED_BY
         WHEN poapp.L4_APPROVED_BY IS NOT NULL THEN poapp.L3_APPROVED_BY
         WHEN poapp.L3_APPROVED_BY IS NOT NULL THEN poapp.L2_APPROVED_BY
         ELSE NULL
     END AS Previous_Approver,
-
     CASE
         WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
         WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
         WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
         ELSE NULL
     END AS Approval_Date_by_Previous_Approver,
-
     poapp.L1_NOTE AS Note1,
     poapp.L2_NOTE AS Note2,
-
     CASE
         WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
         WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
@@ -68,7 +59,6 @@ SELECT
         WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
         WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
     END AS Approval_Date_by_Selected_Approver,
-
     (CASE
         WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
         WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
@@ -82,7 +72,6 @@ SELECT
         WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
         ELSE poapp.L1_APPROVED_DT
     END) AS Total_Days_Pending_from_Previous_Approver,
-
     (CASE
         WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
         WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
@@ -90,7 +79,6 @@ SELECT
         WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
         WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
     END) - TRUNC(poh.SUBMIT_DATE) AS Total_Days_Taken_by_Selected_Approver,
-
     (TRUNC(SYSDATE) - TRUNC(poh.SUBMIT_DATE)) + 1 AS Total_Days_Pending_from_Submission
 
 FROM PO_HEADERS_ALL poh
