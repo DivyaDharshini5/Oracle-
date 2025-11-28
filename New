@@ -1,38 +1,61 @@
-WITH PO_PENDING AS (
-    SELECT
-        poh.po_header_id,
-        poh.segment1,
-        poh.prc_bu_id,
-        TO_CHAR(WF.ASSIGNEDDATE, 'DD.MM.YYYY', 'NLS_DATE_LANGUAGE=AMERICAN') AS ASSIGNEDDATE,
-        WF.ASSIGNEES,
-        CASE
-            WHEN WF.STATE = 'INFO REQUESTED' THEN
-                WF.UPDATEDBYDISPLAYNAME || ' Information Requested to ' || WF.ASSIGNEESDISPLAYNAME
-            ELSE
-                WF.ASSIGNEESDISPLAYNAME
-        END AS ASSIGNEESDISPLAYNAME,
-        WF.OUTCOME,
-        WF.STATE,
-        WF.WORKFLOWPATTERN,
-        WF.TITLE,
-        WF.COMPONENTNAME,
-        WF.COMPOSITENAME,
-        TO_CHAR(POH.SUBMIT_DATE, 'DD.MM.YYYY', 'NLS_DATE_LANGUAGE=AMERICAN') AS SUBMIT_DATE,
-        (TRUNC(SYSDATE) - TRUNC(WF.ASSIGNEDDATE)) + 1 AS PENDING_DAYS_APPROVE,
-        (TRUNC(SYSDATE) - TRUNC(POH.SUBMIT_DATE)) + 1 AS TOTAL_DAYS
-    FROM
-        PO_VERSIONS pov,
-        PO_HEADERS_ALL poh,
-        FA_FUSION_SOAINFRA.WFTASK WF
-    WHERE
-        pov.po_header_id = poh.po_header_id
-        AND pov.change_order_status = 'PENDING APPROVAL'
-        AND pov.approval_instance_id = WF.compositeinstanceid
-        AND WF.state IN ('ASSIGNED', 'INFO REQUESTED')
-        AND WF.assignees IS NOT NULL
-        AND WF.workflowpattern NOT IN ('AGGREGATION', 'FYI')
-        AND WF.componentname = 'DocumentApproval'
-        AND TRUNC(poh.creation_date) BETWEEN :START_DATE_PO AND :END_DATE_PO
-)
-SELECT *
-FROM PO_PENDING;
+SELECT 
+  poh.PRCBUID AS Company_Code,
+  fab.BU_NAME AS PO_Company_Name,
+  poh.SEGMENT1 AS PO_Number,
+  poh.DOCUMENT_STATUS AS PO_Header_Status,
+  hp.party_name AS Vendor_Name,
+  pos.segment1 AS Vendor_Number,
+  (SELECT pex.full_name FROM PER_USERS PRU, PER_PERSON_NAMES_FV PEX 
+   WHERE PEX.PERSON_ID = PRU.PERSON_ID AND PRU.username = poh.created_by 
+   AND TRUNC(poh.creation_date) BETWEEN TRUNC(pex.effective_start_date) AND TRUNC(pex.effective_end_date)) AS PO_Created_By,
+  TO_CHAR(poh.CREATION_DATE, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS PO_Creation_Date,
+  TO_CHAR(poh.SUBMIT_DATE, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS Submit_Date,
+  poh.CURRENCY_CODE AS Currency_Code,
+  (SELECT SUM(ROUND((ROUND((UNIT_PRICE * QUANTITY),2) * NVL((SELECT rat.CONVERSION_RATE FROM GLDAILYRATES rat 
+    WHERE rat.from_currency = poh.CURRENCY_CODE AND TO_CURRENCY = 'USD' AND TO_CHAR(CONVERSION_DATE, 'MM-DD-YYYY') = TO_CHAR(poh.CREATION_DATE, 'MM-DD-YYYY') AND CONVERSION_TYPE = 'Corporate'),1)),2)) 
+   FROM PO_LINES_ALL WHERE po_header_id = poh.po_header_id) AS PO_USD_Amount,
+  CASE 
+    WHEN poapp.L5_APPROVED_BY IS NOT NULL THEN poapp.L5_APPROVED_BY
+    WHEN poapp.L4_APPROVED_BY IS NOT NULL THEN poapp.L4_APPROVED_BY
+    WHEN poapp.L3_APPROVED_BY IS NOT NULL THEN poapp.L3_APPROVED_BY
+    WHEN poapp.L2_APPROVED_BY IS NOT NULL THEN poapp.L2_APPROVED_BY
+    ELSE NULL
+  END AS Previous_Approver,
+  CASE 
+    WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
+    WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
+    WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
+    WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
+    ELSE NULL
+  END AS Approval_Date_by_Previous_Approver,
+  poapp.Note1,
+  CASE 
+    WHEN poapp.L1_APPROVED_BY IS NOT NULL THEN poapp.L1_APPROVED_BY
+    WHEN poapp.L2_APPROVED_BY IS NOT NULL THEN poapp.L2_APPROVED_BY
+    WHEN poapp.L3_APPROVED_BY IS NOT NULL THEN poapp.L3_APPROVED_BY
+    WHEN poapp.L4_APPROVED_BY IS NOT NULL THEN poapp.L4_APPROVED_BY
+    ELSE NULL
+  END AS Selected_Approver,
+  CASE 
+    WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
+    WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
+    WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
+    WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
+    ELSE NULL
+  END AS Approval_Date_by_Selected_Approver,
+  poapp.Note2,
+  (TRUNC(SYSDATE) - TRUNC(poapp.L1_APPROVED_DT)) AS Total_Days_taken_by_selected_approver,
+  (TRUNC(SYSDATE) - TRUNC(poh.SUBMIT_DATE)) AS Total_Days_Pending_from_Submission
+FROM 
+  PO_HEADERS_ALL poh,
+  PO_VENDORS pos,
+  HZ_PARTIES hp,
+  FUN_ALL_BUSINESS_UNITS_V fab,
+  PO_APPROVAL poapp
+WHERE 
+  poh.VENDOR_ID = pos.vendor_id
+  AND hp.party_id = pos.party_id
+  AND fab.BU_ID = poh.PRCBUID
+  AND poh.po_header_id = poapp.po_header_id(+)
+  AND poh.PRCBUID = poapp.PRC_BU_ID(+)
+  AND poh.SEGMENT1 = poapp.segment1(+);
