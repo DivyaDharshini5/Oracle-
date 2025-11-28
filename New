@@ -34,3 +34,5 @@ WITH PO_PENDING AS (
         AND WF.componentname = 'DocumentApproval'
         AND TRUNC(poh.creation_date) BETWEEN :START_DATE_PO AND :END_DATE_PO
 )
+SELECT *
+FROM PO_PENDING;
