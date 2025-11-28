@@ -44,7 +44,8 @@ PO_REJECT AS (
     FROM
         po_action_history pah
         JOIN po_headers_all pha ON pha.po_header_id = pah.object_id
-        LEFT JOIN por_approval_task_comments PATC ON PATC.object_id = pah.object_id
+        LEFT JOIN por_approval_task_comments PATC
+            ON PATC.object_id = pah.object_id
             AND PATC.performer_id = pah.performer_id
             AND PATC.identification_key = pah.identification_key
         LEFT JOIN per_person_names fv pnfv ON pah.performer_id = pnfv.person_id
@@ -52,7 +53,8 @@ PO_REJECT AS (
     WHERE
         pah.action_code = 'REJECT'
         AND pha.document_status = 'REJECTED'
-        AND TRUNC(pha.creation_date) BETWEEN NVL(:START_DATE_PO, TRUNC(pha.creation_date)) AND NVL(:END_DATE_PO, TRUNC(pha.creation_date))
+        AND TRUNC(pha.creation_date) BETWEEN NVL(:START_DATE_PO, TRUNC(pha.creation_date)) 
+                                         AND NVL(:END_DATE_PO, TRUNC(pha.creation_date))
         AND fab.bu_name = NVL(:P_COMPANY_NAME, fab.bu_name)
 ),
 PO_APPROVAL AS (
@@ -69,7 +71,8 @@ PO_APPROVAL AS (
         FROM
             po_action_history pah
             JOIN po_headers_all pha ON pha.po_header_id = pah.object_id
-            LEFT JOIN por_approval_task_comments PATC ON PATC.object_id = pah.object_id
+            LEFT JOIN por_approval_task_comments PATC
+                ON PATC.object_id = pah.object_id
                 AND PATC.performer_id = pah.performer_id
                 AND PATC.identification_key = pah.identification_key
             LEFT JOIN per_person_names fv pnfv ON pah.performer_id = pnfv.person_id
@@ -77,7 +80,8 @@ PO_APPROVAL AS (
         WHERE
             pah.action_code = 'APPROVE'
             AND pha.document_status NOT IN ('WITHDRAWN', 'PENDING APPROVAL')
-            AND TRUNC(pha.creation_date) BETWEEN NVL(:START_DATE_PO, TRUNC(pha.creation_date)) AND NVL(:END_DATE_PO, TRUNC(pha.creation_date))
+            AND TRUNC(pha.creation_date) BETWEEN NVL(:START_DATE_PO, TRUNC(pha.creation_date)) 
+                                            AND NVL(:END_DATE_PO, TRUNC(pha.creation_date))
             AND fab.bu_name = NVL(:P_COMPANY_NAME, fab.bu_name)
     )
     PIVOT (
@@ -85,7 +89,7 @@ PO_APPROVAL AS (
         MAX(note) AS note,
         MAX(approved_dt) AS approved_dt
         FOR rn IN (1 AS L1, 2 AS L2, 3 AS L3, 4 AS L4, 5 AS L5)
-    )
+    ) poapp
 )
 
 SELECT
