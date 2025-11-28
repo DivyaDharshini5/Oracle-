@@ -2,82 +2,56 @@ WITH PO_PENDING AS (
     SELECT
         poh.po_header_id,
         poh.segment1 AS po_number,
-        wf.assigneesdisplayname AS selected_approver,
-        TO_CHAR(wf.assigneddate, 'DD.MM.YYYY') AS submit_date,
-        (TRUNC(SYSDATE) - TRUNC(wf.assigneddate)) AS total_days_pending_from_submission
+        wf.approver_name AS selected_approver,
+        TO_CHAR(wf.action_date, 'DD.MM.YYYY') AS submit_date,
+        (TRUNC(SYSDATE) - TRUNC(wf.action_date)) AS total_days_pending_from_submission
     FROM
-        po_versions pov
-        JOIN po_headers_all poh ON pov.po_header_id = poh.po_header_id
-        JOIN fa_fusion_soainfra.wftask wf ON pov.approval_instance_id = wf.compositeinstanceid
+        POR_HEADERS_V poh
+        JOIN POR_DOC_HEADER_HISTORY_V pov ON poh.po_header_id = pov.po_header_id
+        JOIN FND_WF_APPROVAL_HISTORY_V wf ON pov.approval_instance_id = wf.workflow_id
     WHERE
-        pov.change_order_status = 'PENDING APPROVAL'
-        AND wf.state IN ('ASSIGNED', 'INFO REQUESTED')
+        wf.action_type IN ('PENDING', 'INFO_REQUESTED')
 ),
 
 PO_APPROVAL AS (
     SELECT
-        pha.po_header_id,
-        ppnfv.display_name AS previous_approver,
-        TO_CHAR(pah.action_date, 'DD.MM.YYYY') AS approval_date_prev_approver,
-        REPLACE(REPLACE(REPLACE(patc.user_comment, CHR(10), ''), CHR(13), ''), CHR(9), '') AS note1,
-        ROW_NUMBER() OVER (PARTITION BY pha.po_header_id ORDER BY pah.sequence_num DESC) AS rn
+        pa.po_header_id,
+        pa.approver_name AS previous_approver,
+        TO_CHAR(pa.action_date, 'DD.MM.YYYY') AS approval_date_prev_approver,
+        pa.comments AS note1,
+        ROW_NUMBER() OVER (PARTITION BY pa.po_header_id ORDER BY pa.sequence DESC) AS rn
     FROM
-        po_action_history pah
-        JOIN per_person_names_fv ppnfv ON pah.performer_id = ppnfv.person_id
-        LEFT JOIN por_approval_task_comments patc ON pah.object_id = patc.object_id
+        POR_DOC_APPROVAL_HISTORY_V pa
     WHERE
-        pah.action_code = 'APPROVE'
+        pa.action_type = 'APPROVED'
 ),
 
 PO_MAIN AS (
     SELECT
         poh.po_header_id,
-        gee.segment1 AS company_code,
         fab.bu_name AS po_company_name,
         poh.segment1 AS po_number,
         poh.document_status AS po_header_status,
-        hzp.party_name AS vendor_name,
-        pos.segment1 AS vendor_number,
+        sup.vendor_name,
+        sup.vendor_number,
         TO_CHAR(poh.creation_date, 'DD.MM.YYYY') AS po_creation_date,
         poh.created_by,
         poh.currency_code,
-        (SELECT SUM(ROUND((unit_price * quantity), 2)) FROM po_lines_all WHERE po_header_id = poh.po_header_id) AS po_amount,
-        (SELECT SUM(ROUND(ROUND((unit_price * quantity), 2) * NVL((SELECT rat.conversion_rate
-                                                                   FROM gl_daily_rates rat
-                                                                   WHERE rat.from_currency = poh.currency_code
-                                                                     AND rat.to_currency = 'USD'
-                                                                     AND TO_CHAR(rat.conversion_date,'MM-DD-YYYY') = TO_CHAR(poh.creation_date,'MM-DD-YYYY')
-                                                                     AND rat.conversion_type = 'Corporate'), 1), 2))
-         FROM po_lines_all WHERE po_header_id = poh.po_header_id) AS po_usd_amount
+        poh.total_amount AS po_amount,
+        poh.total_amount_usd AS po_usd_amount
     FROM
-        po_headers_all poh
-        JOIN gl_code_combinations gee ON gee.code_combination_id = (SELECT MAX(code_combination_id) FROM po_distributions_all WHERE po_header_id = poh.po_header_id)
-        JOIN hz_parties hzp ON hzp.party_id = poh.vendor_id
-        JOIN pos_suppliers_v pos ON pos.vendor_id = poh.vendor_id
-        JOIN fun_all_business_units_v fab ON fab.bu_id = poh.prc_bu_id
+        POR_HEADERS_V poh
+        JOIN POS_SUPPLIERS_V sup ON poh.vendor_id = sup.vendor_id
+        JOIN FND_FLEX_VALUES_VSET fab ON fab.flex_value_set_id = poh.business_unit_id
 )
 
 SELECT
-    pm.company_code,
-    pm.po_company_name,
-    pm.po_number,
-    pm.po_header_status,
-    pm.vendor_name,
-    pm.vendor_number,
-    pm.created_by AS po_created_by,
-    pm.po_creation_date,
-    pp.submit_date,
-    pm.currency_code,
-    pm.po_amount,
-    pm.po_usd_amount,
+    pm.*,
     pa.previous_approver,
     pa.approval_date_prev_approver,
     pa.note1,
     pp.selected_approver,
     pp.submit_date AS approval_date_selected_approver,
-    NULL AS note2,
-    (TRUNC(SYSDATE) - TRUNC(pa.approval_date_prev_approver)) AS total_days_pending_from_prev_approver,
-    NULL AS total_days_taken_by_selected_approver,
     pp.total_days_pending_from_submission
 FROM
     PO_MAIN pm
