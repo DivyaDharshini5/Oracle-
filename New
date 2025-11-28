@@ -1,5 +1,4 @@
 SELECT
-    -- Approver details
     CASE
         WHEN poapp.L5_APPROVED_BY IS NOT NULL THEN poapp.L5_APPROVED_BY
         WHEN poapp.L4_APPROVED_BY IS NOT NULL THEN poapp.L4_APPROVED_BY
@@ -8,11 +7,8 @@ SELECT
         WHEN poapp.L1_APPROVED_BY IS NOT NULL THEN poapp.L1_APPROVED_BY
     END AS Selected_Approver,
 
-    -- Company details
-    gcc.segment1 AS Company_Code,  
+    gcc.segment1 AS Company_Code,
     fab.BU_NAME AS PO_Company_Name,
-
-    -- PO Header information
     poh.segment1 AS PO_Number,
     poh.DOCUMENT_STATUS AS PO_Header_Status,
     hp.party_name AS Vendor_Name,
@@ -21,22 +17,23 @@ SELECT
     TO_CHAR(poh.CREATION_DATE, 'DD.MM.YYYY') AS PO_Creation_Date,
     TO_CHAR(poh.SUBMIT_DATE, 'DD.MM.YYYY') AS Submit_Date,
     poh.CURRENCY_CODE AS Currency_Code,
-    (SELECT SUM(ROUND((unit_price * quantity), 2)) FROM po_lines_all WHERE po_header_id = poh.po_header_id) AS PO_Amount,
 
-    -- USD Amount conversion
+    (SELECT SUM(ROUND((UNIT_PRICE * QUANTITY), 2))
+     FROM po_lines_all pol2
+     WHERE pol2.po_header_id = poh.po_header_id) AS PO_Amount,
+
     (SELECT SUM(
         ROUND((unit_price * quantity) *
         NVL((SELECT rat.CONVERSION_RATE
             FROM gl_daily_rates rat
             WHERE rat.from_currency = poh.currency_code
-              AND rat.to_currency = 'USD'
-              AND rat.CONVERSION_TYPE = 'Corporate'
-              AND TO_CHAR(rat.CONVERSION_DATE, 'MM-DD-YYYY') =
-                  TO_CHAR(poh.CREATION_DATE, 'MM-DD-YYYY')
+            AND rat.to_currency = 'USD'
+            AND rat.CONVERSION_TYPE = 'Corporate'
+            AND rat.CONVERSION_DATE = TRUNC(poh.creation_date)
         ), 1), 2))
-    FROM po_lines_all WHERE po_header_id = poh.po_header_id) AS PO_Usd_Amount,
+     FROM po_lines_all pol3
+     WHERE pol3.po_header_id = poh.po_header_id) AS PO_USD_Amount,
 
-    -- Previous Approver
     CASE
         WHEN poapp.L5_APPROVED_BY IS NOT NULL THEN poapp.L4_APPROVED_BY
         WHEN poapp.L4_APPROVED_BY IS NOT NULL THEN poapp.L3_APPROVED_BY
@@ -44,7 +41,6 @@ SELECT
         ELSE NULL
     END AS Previous_Approver,
 
-    -- Approval Date by Previous Approver
     CASE
         WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
         WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
@@ -52,11 +48,9 @@ SELECT
         ELSE NULL
     END AS Approval_Date_by_Previous_Approver,
 
-    -- Notes
-    poapp.Note1 AS Note1,
-    poapp.Note2 AS Note2,
+    poapp.Note1,
+    poapp.Note2,
 
-    -- Approval Date by Selected Approver
     CASE
         WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
         WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
@@ -65,7 +59,6 @@ SELECT
         WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
     END AS Approval_Date_by_Selected_Approver,
 
-    -- Days Pending Calculations
     TRUNC(
         CASE
             WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
@@ -74,7 +67,8 @@ SELECT
             WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
             WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
         END
-    ) - TRUNC(
+    ) -
+    TRUNC(
         CASE
             WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
             WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
@@ -91,24 +85,7 @@ SELECT
             WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
             WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
         END
-    ) - TRUNC(poh.SUBMIT_DATE) AS Total_Days_Taken_by_Selected_Approver,
+    ) - TRUNC(poh.SUBMIT_DATE)
+        AS Total_Days_Taken_by_Selected_Approver,
 
     (TRUNC(SYSDATE) - TRUNC(poh.SUBMIT_DATE)) + 1 AS Total_Days_Pending_from_Submission
-
-FROM
-    po_headers_all poh
-    LEFT JOIN po_lines_all pol ON poh.po_header_id = pol.po_header_id
-    LEFT JOIN po_distributions_all pod ON pol.po_line_id = pod.po_line_id AND pod.distribution_num = 1
-    LEFT JOIN ap_suppliers pos ON poh.vendor_id = pos.vendor_id
-    LEFT JOIN hz_parties hp ON pos.party_id = hp.party_id
-    LEFT JOIN gl_code_combinations gcc ON pod.code_combination_id = gcc.code_combination_id
-    LEFT JOIN fun_all_business_units_v fab ON poh.prc_bu_id = fab.bu_id
-    LEFT JOIN POAPP ON POAPP.po_header_id = poh.po_header_id
-    LEFT JOIN POREJ ON POREJ.po_header_id = poh.po_header_id
-WHERE
-    poh.DOCUMENT_STATUS NOT IN ('CANCELED', 'INCOMPLETE')
-    AND trunc(poh.creation_date) BETWEEN :START_DATE_PO AND :END_DATE_PO
-    AND fab.BU_NAME = NVL(:P_COMPANY_NAME, fab.BU_NAME)
-    AND pos.segment1 = NVL(:P_VENDOR_NUM, pos.segment1)
-    AND hp.party_name = NVL(:P_VENDOR_NAME, hp.party_name)
-    AND poh.DOCUMENT_STATUS = NVL(:P_PO_STATUS, poh.DOCUMENT_STATUS);
