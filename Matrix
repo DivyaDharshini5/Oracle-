@@ -1,9 +1,98 @@
+WITH PO_PENDING AS (
+    SELECT poh.po_header_id,
+           poh.segment1,
+           poh.prc_bu_id,
+           TO_CHAR(wf.assigneddate, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS assigned_date,
+           wf.assignees,
+           CASE 
+               WHEN wf.state = 'INFO REQUESTED' 
+               THEN wf.updatedbydisplayname || ' Information Requested to ' || wf.assigneesdisplayname
+               ELSE wf.assigneesdisplayname
+           END AS assignees_displayname,
+           wf.approvers,
+           wf.outcome,
+           wf.state,
+           wf.workflowpattern,
+           wf.title,
+           wf.componentname,
+           wf.compositename,
+           poh.submit_date,
+           (TRUNC(SYSDATE) - TRUNC(wf.assigneddate)) + 1 AS pending_days_approve,
+           (TRUNC(SYSDATE) - TRUNC(poh.submit_date)) + 1 AS total_days
+    FROM fusion.po_versions pov
+         JOIN fusion.po_headers_all poh ON pov.po_header_id = poh.po_header_id
+         JOIN fa_fusion_soainfra.wftask wf ON pov.approvalinstanceid = wf.compositeinstanceid
+         JOIN fusion.fun_all_business_units_v fab ON fab.bu_id = poh.prc_bu_id
+    WHERE pov.change_order_status = 'PENDING APPROVAL'
+      AND wf.state IN ('ASSIGNED', 'INFO REQUESTED')
+      AND wf.assignees IS NOT NULL
+      AND wf.workflowpattern NOT IN ('AGGREGATION', 'FYI')
+      AND wf.componentname = 'DocumentApproval'
+      AND TRUNC(poh.creation_date) BETWEEN NVL(:start_date_po, TRUNC(poh.creation_date)) 
+                                      AND NVL(:end_date_po, TRUNC(poh.creation_date))
+      AND fab.bu_name = NVL(:pcompany_name, fab.bu_name)
+),
+
+PO_REJECT AS (
+    SELECT pha.po_header_id,
+           pha.prc_bu_id,
+           pha.segment1,
+           ppnfv.full_name AS rejected_by,
+           TO_CHAR(pah.action_date, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS rejected_date,
+           pah.action_code,
+           RTRIM(patc.user_comment, ',') AS reject_comment
+    FROM fusion.po_action_history pah
+         JOIN fusion.po_headers_all pha ON pha.po_header_id = pah.object_id
+         LEFT JOIN fusion.por_approval_task_comments patc 
+                ON patc.object_id = pah.object_id
+               AND patc.performer_id = pah.performer_id
+               AND patc.identification_key = pah.identification_key
+         LEFT JOIN fusion.per_person_names_fv ppnfv ON pah.performer_id = ppnfv.person_id
+         JOIN fusion.fun_all_business_units_v fab ON fab.bu_id = pha.prc_bu_id
+    WHERE NVL(patc.object_subtype_code, 'STANDARD') IN ('STANDARD', 'BLANKET', 'CONTRACT')
+      AND NVL(patc.object_type_code, 'PO') IN ('PO', 'PA')
+      AND NVL(pha.type_lookup_code, 'STANDARD') IN ('STANDARD', 'BLANKET', 'CONTRACT')
+      AND pah.object_subtype_code IN ('STANDARD', 'BLANKET', 'CONTRACT')
+      AND pah.object_type_code IN ('PO', 'PA')
+      AND TRUNC(pha.creation_date) BETWEEN NVL(:start_date_po, TRUNC(pha.creation_date)) 
+                                       AND NVL(:end_date_po, TRUNC(pha.creation_date))
+      AND fab.bu_name = NVL(:pcompany_name, fab.bu_name)
+      AND pah.action_code = 'REJECT'
+      AND pha.document_status = 'REJECTED'
+      AND pah.performer_id IS NOT NULL
+),
+
+PO_APPROVAL AS (
+    SELECT pha.po_header_id,
+           pha.prc_bu_id,
+           pha.segment1,
+           ppnfv.display_name AS approver,
+           REPLACE(REPLACE(REPLACE(RTRIM(patc.user_comment), CHR(9), ''), CHR(10), ''), CHR(13), '') AS note,
+           TO_CHAR(pah.action_date, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS approved_dt,
+           ROW_NUMBER() OVER (PARTITION BY pha.po_header_id ORDER BY pah.sequence_num) AS rn
+    FROM fusion.po_action_history pah
+         JOIN fusion.po_headers_all pha ON pha.po_header_id = pah.object_id
+         LEFT JOIN fusion.por_approval_task_comments patc 
+                ON patc.object_id = pah.object_id
+               AND patc.performer_id = pah.performer_id
+               AND patc.identification_key = pah.identification_key
+         JOIN fusion.per_person_names_fv ppnfv ON pah.performer_id = ppnfv.person_id
+         JOIN fusion.fun_all_business_units_v fab ON fab.bu_id = pha.prc_bu_id
+    WHERE NVL(patc.object_subtype_code, 'STANDARD') IN ('STANDARD', 'BLANKET', 'CONTRACT')
+      AND NVL(patc.object_type_code, 'PO') IN ('PO', 'PA')
+      AND pha.type_lookup_code IN ('STANDARD', 'BLANKET', 'CONTRACT')
+      AND pah.action_code = 'APPROVE'
+      AND pah.performer_id IS NOT NULL
+      AND pha.document_status NOT IN ('WITHDRAWN','PENDING APPROVAL')
+      AND TRUNC(pha.creation_date) BETWEEN NVL(:start_date_po, TRUNC(pha.creation_date)) 
+                                       AND NVL(:end_date_po, TRUNC(pha.creation_date))
+      AND fab.bu_name = NVL(:pcompany_name, fab.bu_name)
+)
+
+-- Final SELECT with only requested columns
 SELECT
-    -- Company Info
     gcc.segment1 AS company_code,
     fab.bu_name  AS po_company_name,
-    
-    -- PO Header Info
     poh.segment1 AS po_number,
     poh.document_status AS po_header_status,
     hp.party_name AS vendor_name,
@@ -12,12 +101,10 @@ SELECT
     TO_CHAR(poh.creation_date, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS po_creation_date,
     TO_CHAR(poh.submit_date, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS submit_date,
     poh.currency_code AS currency_code,
-    
     -- Amounts
     (SELECT SUM(ROUND(pol.unit_price * pol.quantity,2))
      FROM fusion.po_lines_all pol
      WHERE pol.po_header_id = poh.po_header_id) AS po_amount,
-     
     (SELECT SUM(ROUND(
         ROUND(pol.unit_price * pol.quantity,2) *
         NVL((SELECT rat.conversion_rate
@@ -28,55 +115,23 @@ SELECT
                AND rat.conversion_type = 'Corporate'),1),2))
      FROM fusion.po_lines_all pol
      WHERE pol.po_header_id = poh.po_header_id) AS po_usd_amount,
-     
     -- Approval Info
-    CASE
-        WHEN poapp.l4_approved_by IS NOT NULL THEN poapp.l4_approved_by
-        WHEN poapp.l3_approved_by IS NOT NULL THEN poapp.l3_approved_by
-        WHEN poapp.l2_approved_by IS NOT NULL THEN poapp.l2_approved_by
-        WHEN poapp.l1_approved_by IS NOT NULL THEN poapp.l1_approved_by
-    END AS selected_approver,
-    
-    CASE
-        WHEN poapp.l5_approved_by IS NOT NULL THEN poapp.l5_approved_by
-        WHEN poapp.l4_approved_by IS NOT NULL THEN poapp.l4_approved_by
-        WHEN poapp.l3_approved_by IS NOT NULL THEN poapp.l3_approved_by
-        WHEN poapp.l2_approved_by IS NOT NULL THEN poapp.l2_approved_by
-        ELSE NULL
-    END AS previous_approver,
-    
-    CASE
-        WHEN poapp.l5_approved_dt IS NOT NULL THEN poapp.l5_approved_dt
-        WHEN poapp.l4_approved_dt IS NOT NULL THEN poapp.l4_approved_dt
-        WHEN poapp.l3_approved_dt IS NOT NULL THEN poapp.l3_approved_dt
-        WHEN poapp.l2_approved_dt IS NOT NULL THEN poapp.l2_approved_dt
-        ELSE NULL
-    END AS approval_date_by_previous_approver,
-    
-    poapp.note1,
-    CASE
-        WHEN poapp.l5_approved_dt IS NOT NULL THEN poapp.l5_approved_dt
-        WHEN poapp.l4_approved_dt IS NOT NULL THEN poapp.l4_approved_dt
-        WHEN poapp.l3_approved_dt IS NOT NULL THEN poapp.l3_approved_dt
-        WHEN poapp.l2_approved_dt IS NOT NULL THEN poapp.l2_approved_dt
-        WHEN poapp.l1_approved_dt IS NOT NULL THEN poapp.l1_approved_dt
-    END AS approval_date_by_selected_approver,
-    poapp.note2,
-    
+    poapp.approver AS selected_approver,
+    porej.rejected_by AS previous_approver,
+    porej.rejected_date AS approval_date_by_previous_approver,
+    poapp.note AS note1,
+    poapp.approved_dt AS approval_date_by_selected_approver,
+    NULL AS note2,
     -- Timing Metrics
-    (TRUNC(poapp.l2_approved_dt) - TRUNC(poapp.l1_approved_dt)) AS total_days_pending_from_previous_approver,
-    (TRUNC(poapp.l1_approved_dt) - TRUNC(poh.submit_date)) AS total_days_taken_by_selected_approver,
+    (TRUNC(poapp.approved_dt) - TRUNC(poh.submit_date)) AS total_days_taken_by_selected_approver,
     (TRUNC(SYSDATE) - TRUNC(poh.submit_date)) AS total_days_pending_from_submission
-    
 FROM fusion.po_headers_all poh
      JOIN fusion.po_vendors pos ON pos.vendor_id = poh.vendor_id
      JOIN fusion.hz_parties hp ON hp.party_id = pos.party_id
      JOIN fusion.po_distributions_all pod ON poh.po_header_id = pod.po_header_id
      JOIN fusion.gl_code_combinations gcc ON pod.code_combination_id = gcc.code_combination_id
      JOIN fusion.fun_all_business_units_v fab ON fab.bu_id = poh.prc_bu_id
-     LEFT JOIN fusion.per_person_names_fv ppnfv ON poh.agent_id = ppnfv.person_id
-     LEFT JOIN fusion.per_users pru ON pru.username = poh.created_by
-     LEFT JOIN poapp ON poapp.po_header_id = poh.po_header_id
-     LEFT JOIN porej ON porej.po_header_id = poh.po_header_id
-     LEFT JOIN popen ON popen.po_header_id = poh.po_header_id
+     LEFT JOIN PO_APPROVAL poapp ON poapp.po_header_id = poh.po_header_id
+     LEFT JOIN PO_REJECT porej ON porej.po_header_id = poh.po_header_id
+     LEFT JOIN PO_PENDING popen ON popen.po_header_id = poh.po_header_id
 WHERE poh.document_status NOT IN ('CANCELED','INCOMPLETE');
