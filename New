@@ -3,119 +3,34 @@ WITH PO_PENDING AS (
         poh.po_header_id,
         poh.segment1,
         poh.prc_bu_id,
-        TO_CHAR(wf.assigneddate, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS assigneddate,
-        wf.assignees,
+        TO_CHAR(WF.ASSIGNEDDATE, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS ASSIGNEDDATE,
+        WF.ASSIGNEES,
         CASE
-            WHEN wf.state = 'INFO REQUESTED' THEN
-                wf.updatedbydisplayname || ' Information Requested to ' || wf.assigneesdisplayname
+            WHEN WF.STATE = 'INFO REQUESTED' THEN
+                WF.UPDATEDBYDISPLAYNAME || ' Information Requested to ' || WF.ASSIGNEESDISPLAYNAME
             ELSE
-                wf.assigneesdisplayname
-        END AS assigneesdisplayname,
-        wf.approvers,
-        wf.outcome,
-        wf.state,
-        wf.workflowpattern,
-        wf.title,
-        wf.componentname,
-        wf.compositename,
-        TO_CHAR(poh.submit_date, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS submit_date,
-        (TRUNC(SYSDATE) - TRUNC(wf.assigneddate)) + 1 AS pending_days_approve,
-        (TRUNC(SYSDATE) - TRUNC(poh.submit_date)) + 1 AS total_days
+                WF.ASSIGNEESDISPLAYNAME
+        END AS ASSIGNEESDISPLAYNAME,
+        WF.OUTCOME,
+        WF.STATE,
+        WF.WORKFLOWPATTERN,
+        WF.TITLE,
+        WF.COMPONENTNAME,
+        WF.COMPOSITENAME,
+        TO_CHAR(POH.SUBMIT_DATE, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS SUBMIT_DATE,
+        (TRUNC(SYSDATE) - TRUNC(WF.ASSIGNEDDATE)) + 1 AS PENDING_DAYS_APPROVE,
+        (TRUNC(SYSDATE) - TRUNC(POH.SUBMIT_DATE)) + 1 AS TOTAL_DAYS
     FROM
-        po_versions pov,
-        po_headers_all poh,
-        fa_fusion_soainfra.wftask wf,
-        fun_all_business_units_v fab
+        PO_VERSIONS pov,
+        PO_HEADERS_ALL poh,
+        FA_FUSION_SOAINFRA.WFTASK WF
     WHERE
         pov.po_header_id = poh.po_header_id
         AND pov.change_order_status = 'PENDING APPROVAL'
-        AND pov.approval_instance_id = wf.compositeinstanceid
-        AND wf.state IN ('ASSIGNED', 'INFO REQUESTED')
-        AND wf.assignees IS NOT NULL
-        AND wf.workflowpattern NOT IN ('AGGREGATION', 'FYI')
-        AND wf.componentname = 'DocumentApproval'
+        AND pov.approval_instance_id = WF.compositeinstanceid
+        AND WF.state IN ('ASSIGNED', 'INFO REQUESTED')
+        AND WF.assignees IS NOT NULL
+        AND WF.workflowpattern NOT IN ('AGGREGATION', 'FYI')
+        AND WF.componentname = 'DocumentApproval'
         AND TRUNC(poh.creation_date) BETWEEN :START_DATE_PO AND :END_DATE_PO
-        AND fab.bu_id = poh.prc_bu_id
-        AND fab.bu_name = NVL(:P_COMPANY_NAME, fab.bu_name)
-),
-
-PO_REJECT AS (
-    SELECT
-        pah.po_header_id,
-        pah.prc_bu_id,
-        pah.segment1
-    FROM
-        po_action_history pah,
-        po_headers_all pha,
-        por_approval_task_comments patc,
-        fun_all_business_units_v fab
-    WHERE
-        pha.po_header_id = pah.object_id
-        AND patc.object_id(+) = pah.object_id
-        AND patc.performer_id(+) = pah.performer_id
-        AND NVL(patc.object_sub_type_code, 'STANDARD') IN ('STANDARD', 'BLANKET', 'CONTRACT')
-        AND NVL(patc.object_type_code, 'PO') IN ('PO', 'PA')
-        AND NVL(pha.type_lookup_code, 'STANDARD') IN ('STANDARD', 'BLANKET', 'CONTRACT')
-        AND pah.performer_id IS NOT NULL
-        AND TRUNC(pha.creation_date) BETWEEN NVL(:START_DATE_PO, TRUNC(pha.creation_date)) AND NVL(:END_DATE_PO, TRUNC(pha.creation_date))
-        AND fab.bu_id = pha.prc_bu_id
-        AND fab.bu_name = NVL(:P_COMPANY_NAME, fab.bu_name)
-        AND pah.action_code = 'REJECT'
-        AND pha.document_status = 'REJECTED'
-),
-
-PO_APPROVAL AS (
-    SELECT
-        pha.po_header_id,
-        pha.prc_bu_id,
-        pha.segment1,
-        ppnfv.display_name AS approver,
-        TO_CHAR(pah.action_date, 'DD.MM.YYYY', 'NLS DATE LANGUAGE AMERICAN') AS approved_dt,
-        ROW_NUMBER() OVER (PARTITION BY pha.po_header_id ORDER BY pah.sequence_num) AS rn
-    FROM
-        po_action_history pah,
-        po_headers_all pha,
-        per_person_names_fv ppnfv,
-        por_approval_task_comments patc,
-        fun_all_business_units_v fab
-    WHERE
-        pha.po_header_id = pah.object_id
-        AND patc.object_id(+) = pah.object_id
-        AND patc.identification_key(+) = pah.identification_key
-        AND NVL(patc.object_sub_type_code, 'STANDARD') IN ('STANDARD', 'BLANKET', 'CONTRACT')
-        AND NVL(patc.object_type_code, 'PO') IN ('PO', 'PA')
-        AND NVL(pha.type_lookup_code, 'STANDARD') IN ('STANDARD', 'BLANKET', 'CONTRACT')
-        AND pah.performer_id = ppnfv.person_id(+)
-        AND pah.performer_id IS NOT NULL
-        AND pah.action_code = 'APPROVE'
-        AND pha.document_status NOT IN ('WITHDRAWN', 'PENDING APPROVAL')
-        AND TRUNC(pha.creation_date) BETWEEN NVL(:START_DATE_PO, TRUNC(pha.creation_date)) AND NVL(:END_DATE_PO, TRUNC(pha.creation_date))
-        AND fab.bu_id = pha.prc_bu_id
-        AND fab.bu_name = NVL(:P_COMPANY_NAME, fab.bu_name)
 )
-
-SELECT
-    poh.po_header_id,
-    poh.segment1 AS po_number,
-    poh.prc_bu_id,
-    popen.assigneddate,
-    popen.assignees,
-    popen.assigneesdisplayname,
-    popen.outcome,
-    popen.state,
-    popen.workflowpattern,
-    popen.title,
-    popen.componentname,
-    popen.compositename,
-    popen.submit_date,
-    popen.pending_days_approve,
-    popen.total_days
-FROM
-    po_headers_all poh
-    LEFT JOIN PO_PENDING popen ON popen.po_header_id = poh.po_header_id
-    LEFT JOIN PO_REJECT porej ON porej.po_header_id = poh.po_header_id
-    LEFT JOIN PO_APPROVAL poapp ON poapp.po_header_id = poh.po_header_id
-WHERE
-    poh.type_lookup_code IN ('STANDARD', 'BLANKET', 'CONTRACT')
-    AND poh.document_status NOT IN ('CANCELED', 'INCOMPLETE')
-    AND TRUNC(poh.creation_date) BETWEEN :START_DATE_PO AND :END_DATE_PO;
