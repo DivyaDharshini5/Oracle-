@@ -1,3 +1,12 @@
+WITH PO_PENDING AS (
+    -- your original PO_PENDING CTE (unchanged)
+),
+PO_REJECT AS (
+    -- your original PO_REJECT CTE (unchanged)
+),
+PO_APPROVAL AS (
+    -- your original PO_APPROVAL CTE (unchanged)
+)
 SELECT
     -- Selected Approver
     CASE
@@ -8,30 +17,31 @@ SELECT
         WHEN poapp.L1_APPROVED_BY IS NOT NULL THEN poapp.L1_APPROVED_BY
     END AS Selected_Approver,
 
-    fab.bu_id AS Company_Code,
-    fab.bu_name AS PO_Company_Name,
-    poh.segment1 AS PO_Number,
-    poh.document_status AS PO_Header_Status,
-    hp.party_name AS Vendor_Name,
-    pos.segment1 AS Vendor_Number,
-    poh.created_by AS PO_Created_By,
-    TO_CHAR(poh.creation_date,'DD.MM.YYYY') AS PO_Creation_Date,
-    TO_CHAR(poh.submit_date,'DD.MM.YYYY') AS Submit_Date,
-    poh.currency_code AS Currency_Code,
+    fab.BU_ID AS Company_Code,
+    fab.BU_NAME AS PO_Company_Name,
+    poh.SEGMENT1 AS PO_Number,
+    poh.DOCUMENT_STATUS AS PO_Header_Status,
+    hp.PARTY_NAME AS Vendor_Name,
+    pos.SEGMENT1 AS Vendor_Number,
+    poh.CREATED_BY AS PO_Created_By,
+    TO_CHAR(poh.CREATION_DATE,'DD.MM.YYYY') AS PO_Creation_Date,
+    TO_CHAR(poh.SUBMIT_DATE,'DD.MM.YYYY') AS Submit_Date,
+    poh.CURRENCY_CODE AS Currency_Code,
 
-    (SELECT SUM(ROUND(unit_price*quantity,2)) 
-     FROM po_lines_all pol2 
-     WHERE pol2.po_header_id = poh.po_header_id) AS PO_Amount,
+    -- PO Amounts
+    (SELECT SUM(ROUND(unit_price*quantity,2))
+     FROM PO_LINES_ALL pol
+     WHERE pol.po_header_id = poh.po_header_id) AS PO_Amount,
 
     (SELECT SUM(ROUND((unit_price*quantity) *
-        NVL((SELECT rat.conversion_rate 
-             FROM gl_daily_rates rat
-             WHERE rat.from_currency = poh.currency_code
-               AND rat.to_currency = 'USD'
-               AND rat.conversion_type = 'Corporate'
-               AND rat.conversion_date = TRUNC(poh.creation_date)),1),2))
-     FROM po_lines_all pol3
-     WHERE pol3.po_header_id = poh.po_header_id) AS PO_USD_Amount,
+        NVL((SELECT rat.CONVERSION_RATE
+             FROM GL_DAILY_RATES rat
+             WHERE rat.FROM_CURRENCY = poh.CURRENCY_CODE
+               AND rat.TO_CURRENCY = 'USD'
+               AND rat.CONVERSION_TYPE = 'Corporate'
+               AND rat.CONVERSION_DATE = TRUNC(poh.CREATION_DATE)),1),2))
+     FROM PO_LINES_ALL pol
+     WHERE pol.po_header_id = poh.po_header_id) AS PO_USD_Amount,
 
     -- Previous Approver
     CASE
@@ -79,29 +89,29 @@ SELECT
         WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
         WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
         WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
-    END) - TRUNC(poh.submit_date) AS Total_Days_Taken_by_Selected_Approver,
+    END) - TRUNC(poh.SUBMIT_DATE) AS Total_Days_Taken_by_Selected_Approver,
 
-    (TRUNC(SYSDATE) - TRUNC(poh.submit_date)) + 1 AS Total_Days_Pending_from_Submission
+    (TRUNC(SYSDATE) - TRUNC(poh.SUBMIT_DATE)) + 1 AS Total_Days_Pending_from_Submission
 
-FROM po_headers_all poh
-LEFT JOIN po_lines_all pol ON pol.po_header_id = poh.po_header_id
-LEFT JOIN ap_suppliers pos ON pos.vendor_id = poh.vendor_id
-LEFT JOIN hz_parties hp ON hp.party_id = pos.party_id
-LEFT JOIN fun_all_business_units_v fab ON fab.bu_id = poh.prcbuid
-LEFT JOIN PO_APPROVAL poapp ON poapp.po_header_id = poh.po_header_id
-LEFT JOIN PO_REJECT porej ON porej.po_header_id = poh.po_header_id
-LEFT JOIN PO_PENDING popen ON popen.po_header_id = poh.po_header_id
+FROM PO_HEADERS_ALL poh
+LEFT JOIN PO_LINES_ALL pol ON pol.PO_HEADER_ID = poh.PO_HEADER_ID
+LEFT JOIN AP_SUPPLIERS pos ON pos.VENDOR_ID = poh.VENDOR_ID
+LEFT JOIN HZ_PARTIES hp ON hp.PARTY_ID = pos.PARTY_ID
+LEFT JOIN FUN_ALL_BUSINESS_UNITS_V fab ON fab.BU_ID = poh.PRCBUID
+LEFT JOIN PO_APPROVAL poapp ON poapp.PO_HEADER_ID = poh.PO_HEADER_ID
+LEFT JOIN PO_REJECT porej ON porej.PO_HEADER_ID = poh.PO_HEADER_ID
+LEFT JOIN PO_PENDING popen ON popen.PO_HEADER_ID = poh.PO_HEADER_ID
 
-WHERE poh.document_status NOT IN ('CANCELED','INCOMPLETE')
-  AND TRUNC(poh.creation_date) BETWEEN :START_DATE_PO AND :END_DATE_PO
-  AND fab.bu_name = NVL(:P_COMPANY_NAME, fab.bu_name)
+WHERE poh.DOCUMENT_STATUS NOT IN ('CANCELED','INCOMPLETE')
+  AND TRUNC(poh.CREATION_DATE) BETWEEN :START_DATE_PO AND :END_DATE_PO
+  AND fab.BU_NAME = NVL(:P_COMPANY_NAME, fab.BU_NAME)
 
-GROUP BY 
-    poh.po_header_id, fab.bu_id, fab.bu_name, poh.segment1, poh.document_status,
-    hp.party_name, pos.segment1, poh.created_by, poh.creation_date, poh.submit_date,
-    poh.currency_code,
+GROUP BY
+    poh.PO_HEADER_ID, fab.BU_ID, fab.BU_NAME, poh.SEGMENT1, poh.DOCUMENT_STATUS,
+    hp.PARTY_NAME, pos.SEGMENT1, poh.CREATED_BY, poh.CREATION_DATE, poh.SUBMIT_DATE,
+    poh.CURRENCY_CODE,
     poapp.L1_NOTE, poapp.L2_NOTE,
     poapp.L1_APPROVED_DT, poapp.L2_APPROVED_DT, poapp.L3_APPROVED_DT, poapp.L4_APPROVED_DT, poapp.L5_APPROVED_DT,
     poapp.L1_APPROVED_BY, poapp.L2_APPROVED_BY, poapp.L3_APPROVED_BY, poapp.L4_APPROVED_BY, poapp.L5_APPROVED_BY
 
-ORDER BY poh.segment1;
+ORDER BY poh.SEGMENT1;
