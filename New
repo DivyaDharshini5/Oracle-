@@ -1,99 +1,12 @@
-WITH PO_PENDING AS (
-    -- original PO_PENDING CTE with schema prefixes
-),
-PO_REJECT AS (
-    -- original PO_REJECT CTE with schema prefixes
-),
-PO_APPROVAL AS (
-    -- original PO_APPROVAL CTE with schema prefixes
-)
-SELECT
-    CASE
-        WHEN poapp.L5_APPROVED_BY IS NOT NULL THEN poapp.L5_APPROVED_BY
-        WHEN poapp.L4_APPROVED_BY IS NOT NULL THEN poapp.L4_APPROVED_BY
-        WHEN poapp.L3_APPROVED_BY IS NOT NULL THEN poapp.L3_APPROVED_BY
-        WHEN poapp.L2_APPROVED_BY IS NOT NULL THEN poapp.L2_APPROVED_BY
-        WHEN poapp.L1_APPROVED_BY IS NOT NULL THEN poapp.L1_APPROVED_BY
-    END AS Selected_Approver,
-    fab.BU_ID AS Company_Code,
-    fab.BU_NAME AS PO_Company_Name,
-    poh.SEGMENT1 AS PO_Number,
-    poh.DOCUMENT_STATUS AS PO_Header_Status,
-    hp.PARTY_NAME AS Vendor_Name,
-    pos.SEGMENT1 AS Vendor_Number,
-    poh.CREATED_BY AS PO_Created_By,
-    TO_CHAR(poh.CREATION_DATE,'DD.MM.YYYY') AS PO_Creation_Date,
-    TO_CHAR(poh.SUBMIT_DATE,'DD.MM.YYYY') AS Submit_Date,
-    poh.CURRENCY_CODE AS Currency_Code,
-    (SELECT SUM(ROUND(pol2.UNIT_PRICE*pol2.QUANTITY,2))
-     FROM PO.PO_LINES_ALL pol2
-     WHERE pol2.PO_HEADER_ID = poh.PO_HEADER_ID) AS PO_Amount,
-    (SELECT SUM(ROUND((pol3.UNIT_PRICE*pol3.QUANTITY) *
-         NVL((SELECT rat.CONVERSION_RATE
-              FROM GL.GL_DAILY_RATES rat
-              WHERE rat.FROM_CURRENCY = poh.CURRENCY_CODE
-                AND rat.TO_CURRENCY = 'USD'
-                AND rat.CONVERSION_TYPE = 'Corporate'
-                AND rat.CONVERSION_DATE = TRUNC(poh.CREATION_DATE)
-             ),1),2))
-     FROM PO.PO_LINES_ALL pol3
-     WHERE pol3.PO_HEADER_ID = poh.PO_HEADER_ID) AS PO_USD_Amount,
-    CASE
-        WHEN poapp.L5_APPROVED_BY IS NOT NULL THEN poapp.L4_APPROVED_BY
-        WHEN poapp.L4_APPROVED_BY IS NOT NULL THEN poapp.L3_APPROVED_BY
-        WHEN poapp.L3_APPROVED_BY IS NOT NULL THEN poapp.L2_APPROVED_BY
+SELECT DISTINCT
+    CASE 
+        WHEN poapp_15_approved_dt IS NOT NULL THEN poapp_15_approved_by
+        WHEN poapp_13_approved_dt IS NOT NULL THEN poapp_13_approved_by
+        WHEN poapp_11_approved_dt IS NOT NULL THEN poapp_11_approved_by
         ELSE NULL
-    END AS Previous_Approver,
-    CASE
-        WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
-        WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
-        WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
-        ELSE NULL
-    END AS Approval_Date_by_Previous_Approver,
-    poapp.L1_NOTE AS Note1,
-    poapp.L2_NOTE AS Note2,
-    CASE
-        WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
-        WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
-        WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
-        WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
-        WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
-    END AS Approval_Date_by_Selected_Approver,
-    TRUNC(
-        CASE
-            WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
-            WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
-            WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
-            WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
-            WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
-        END
-    ) - TRUNC(
-        CASE
-            WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
-            WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
-            WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
-            ELSE poapp.L1_APPROVED_DT
-        END
-    ) AS Total_Days_Pending_from_Previous_Approver,
-    TRUNC(
-        CASE
-            WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
-            WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
-            WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
-            WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
-            WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
-        END
-    ) - TRUNC(poh.SUBMIT_DATE) AS Total_Days_Taken_by_Selected_Approver,
-    (TRUNC(SYSDATE) - TRUNC(poh.SUBMIT_DATE)) + 1 AS Total_Days_Pending_from_Submission
-FROM PO.PO_HEADERS_ALL poh
-LEFT JOIN PO.PO_LINES_ALL pol ON pol.PO_HEADER_ID = poh.PO_HEADER_ID
-LEFT JOIN AP.AP_SUPPLIERS pos ON pos.VENDOR_ID = poh.VENDOR_ID
-LEFT JOIN HZ.HZ_PARTIES hp ON hp.PARTY_ID = pos.PARTY_ID
-LEFT JOIN FUN.FUN_ALL_BUSINESS_UNITS_V fab ON fab.BU_ID = poh.PRCBUID
-LEFT JOIN PO_APPROVAL poapp ON poapp.PO_HEADER_ID = poh.PO_HEADER_ID
-LEFT JOIN PO_REJECT porej ON porej.PO_HEADER_ID = poh.PO_HEADER_ID
-LEFT JOIN PO_PENDING popen ON popen.PO_HEADER_ID = poh.PO_HEADER_ID
-WHERE poh.DOCUMENT_STATUS NOT IN ('CANCELED','INCOMPLETE')
-  AND TRUNC(poh.CREATION_DATE) BETWEEN :START_DATE_PO AND :END_DATE_PO
-  AND fab.BU_NAME = NVL(:P_COMPANY_NAME, fab.BU_NAME)
-ORDER BY poh.SEGMENT1;
+    END AS selected_approver
+FROM PO_APPROVAL
+WHERE (poapp_15_approved_dt IS NOT NULL
+    OR poapp_13_approved_dt IS NOT NULL
+    OR poapp_11_approved_dt IS NOT NULL)
+ORDER BY selected_approver;
