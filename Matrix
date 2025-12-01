@@ -1,159 +1,34 @@
-WITH PO_PENDING AS (
-    SELECT 
-        poh.po_header_id,
-        poh.segment1,
-        poh.PRC_BU_ID,
-        TO_CHAR(wf.ASSIGNEDDATE,'DD.MM.YYYY', 'NLS_DATE_LANGUAGE AMERICAN') AS ASSIGNEDDATE,
-        wf.ASSIGNEES,
-        CASE 
-            WHEN state ='INFO REQUESTED' THEN wf.UPDATEDBYDISPLAYNAME || ' Information Requested to ' || wf.ASSIGNEESDISPLAYNAME
-            ELSE wf.ASSIGNEESDISPLAYNAME
-        END AS ASSIGNEESDISPLAYNAME,
-        wf.APPROVERS,
-        wf.outcome,
-        wf.state,
-        wf.workflowpattern,
-        wf.title,
-        wf.componentname,
-        poh.SUBMIT_DATE,
-        (TRUNC(SYSDATE)-TRUNC(wf.ASSIGNEDDATE))+1 AS PENDING_DAYS_APPROVED,
-        (TRUNC(SYSDATE)-TRUNC(poh.SUBMIT_DATE))+1 AS TOTAL_DAYS
-    FROM 
-        PO_VERSIONS pov,
-        PO_HEADERS_ALL poh,
-        FA_FUSION_SOAINFRA.WFTASK wf,
-        FUN_ALL_BUSINESS_UNITS_V fab
-    WHERE 
-        pov.po_header_id = poh.po_header_id
-        AND pov.change_order_status = 'PENDING APPROVAL'
-        AND pov.approval_instance_id = wf.compositeinstanceid
-        AND wf.state IN ('ASSIGNED','INFO REQUESTED')
-        AND wf.assignees IS NOT NULL
-        AND wf.workflowpattern NOT IN ('AGGREGATION','PYI')
-        AND wf.componentname = 'Document Approval'
-        AND fab.BU_ID = poh.PRC_BU_ID
-        AND fab.BU_NAME = NVL(:P_BU_NAME, fab.BU_NAME)
-),
-
-PO_REJECT AS (
-    SELECT 
-        pha.po_header_id,
-        pha.prc_bu_id,
-        pha.segment1,
-        ppnfv.full_name AS REJECTED_BY,
-        TO_CHAR(pah.ACTION_DATE, 'DD.MM.YYYY','NLS_DATE_LANGUAGE AMERICAN') AS REJECTED_DATE,
-        pah.ACTION_CODE,
-        REPLACE(REPLACE(REPLACE(REPLACE(RTRIM(TO_CHAR(PATC.USER_COMMENT)),',','','','',''),'','',''),'','') AS COMMENTS
-    FROM 
-        PE_ACTION_HISTORY pah,
-        PO_HEADERS_ALL pha,
-        PER_PERSON_NAMES fv ppnfv,
-        POR_APPROVAL_TASK_COMMENTS PATC,
-        FUN_ALL_BUSINESS_UNITS_V fab
-    WHERE 
-        pha.po_header_id = pah.object_id
-        AND PATC.object_id (+) = pah.object_id
-        AND PATC.performer_id (+) = pah.performer_id
-        AND PATC.IDENTIFICATION_KEY (+) = pah.IDENTIFICATION_KEY
-        AND NVL(PATC.OBJECT_SUB_TYPE_CODE,'STANDARD') IN ('STANDARD','BLANKET')
-        AND NVL(PATC.OBJECT_TYPE_CODE,'PO') IN ('PO','PA')
-        AND NVL(pha.TYPE_LOOKUP_CODE,'STANDARD') IN ('STANDARD','BLANKET','CONTRACT')
-        AND pah.performer_id = ppnfv.person_id(+)
-        AND pah.object_sub_type_code IN ('STANDARD','BLANKET','CONTRACT')
-        AND fab.BU_ID = PHA.PRC_BU_ID
-        AND fab.BU_NAME = NVL(:P_BU_NAME, fab.BU_NAME)
-        AND pah.ACTION_CODE = 'REJECT'
-        AND pha.DOCUMENT_STATUS = 'REJECTED'
-        AND pah.performer_id IS NOT NULL
-),
-
-POAPP AS (
-    SELECT * 
-    FROM PO_APPROVAL
-),
-
-PO_SELECTED AS (
-    SELECT 
-        poh.po_header_id,
-        :P_SELECTED_APPROVER AS SELECTED_APPROVER,
-        CASE
-            WHEN poapp.L1_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L1_APPROVED_DT
-            WHEN poapp.L2_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L2_APPROVED_DT
-            WHEN poapp.L3_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L3_APPROVED_DT
-            WHEN poapp.L4_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L4_APPROVED_DT
-            WHEN poapp.L5_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L5_APPROVED_DT
-        END AS APPROVAL_DATE_BY_SELECTED_APPROVER
-    FROM PO_HEADERS_ALL poh
-    LEFT JOIN POAPP poapp ON poapp.po_header_id = poh.po_header_id
-    WHERE :P_SELECTED_APPROVER IN (
-        poapp.L1_APPROVED_BY,
-        poapp.L2_APPROVED_BY,
-        poapp.L3_APPROVED_BY,
-        poapp.L4_APPROVED_BY,
-        poapp.L5_APPROVED_BY
-    )
-)
-
-SELECT
-    poh.segment1 AS PO_NUMBER,
-    pos.segment1 AS VENDOR_NUMBER,
-    hp.party_name AS VENDOR_NAME,
-    poh.DOCUMENT_STATUS,
-    poh.CURRENCY_CODE,
-    fab.BU_NAME AS PO_COMPANY_NAME,
-    gcc.segment1 AS COMPANY_CODE,
-    ROUND(SUM(pol.UNIT_PRICE * pol.QUANTITY),2) AS PO_AMOUNT,
-    ROUND(SUM((pol.UNIT_PRICE * pol.QUANTITY) * NVL((SELECT rat.CONVERSION_RATE 
-        FROM GL_DAILY_RATES rat 
-        WHERE rat.FROM_CURRENCY = poh.CURRENCY_CODE
-          AND rat.TO_CURRENCY = 'USD'
-          AND TO_CHAR(CONVERSION_DATE,'MM-DD-YYYY') = TO_CHAR(poh.CREATION_DATE,'MM-DD-YYYY')
-          AND CONVERSION_TYPE = 'Corporate'),1)),2) AS PO_USD_AMOUNT,
-    TO_CHAR(poh.SUBMIT_DATE,'DD.MM.YYYY','NLS_DATE_LANGUAGE AMERICAN') AS SUBMIT_DATE,
-    poh.DOCUMENT_STATUS AS PO_HEADER_STATUS,
-    poh.CREATED_BY AS PO_CREATED_BY,
-    TO_CHAR(poh.CREATION_DATE,'DD.MM.YYYY','NLS_DATE_LANGUAGE AMERICAN') AS PO_CREATION_DATE,
-    poapp.Note1,
-    poapp.Note2,
-    ps.SELECTED_APPROVER,
-    ps.APPROVAL_DATE_BY_SELECTED_APPROVER
-FROM
-    PO_HEADERS_ALL poh,
-    PO_LINES_ALL pol,
-    POZ_SUPPLIERS_V pos,
-    HZ_PARTIES hp,
-    PO_DISTRIBUTIONS_ALL pod,
-    GL_CODE_COMBINATIONS gcc,
-    FUN_ALL_BUSINESS_UNITS_V fab,
-    PER_PERSON_NAMES FV PPNFV,
-    PO_APPROVAL poapp,
-    PO_REJECT porej,
-    PO_PENDING popen
-WHERE
-    poh.po_header_id = pol.po_header_id
-    AND pol.line_num = 1
-    AND pos.vendor_id = poh.vendor_id
-    AND hp.party_id = pos.party_id
-    AND pol.po_line_id = pod.po_line_id
-    AND pol.po_header_id = pod.po_header_id
-    AND poh.DOCUMENT_STATUS NOT IN ('CANCELED','INCOMPLETE')
-    AND pod.distribution_num = 1
-    AND fab.BU_ID = poh.PRC_BU_ID
-    AND TRUNC(SYSDATE) BETWEEN fab.DATE_FROM (+) AND TO_CHAR(NVL(fab.DATE_TO(+),'4712/12/31'),'YYYY/MM/DD')
-    AND fab.BU_NAME = NVL(:P_BU_NAME, fab.BU_NAME)
-    AND poh.DOCUMENT_STATUS = NVL(:P_PO_STATUS, poh.DOCUMENT_STATUS)
-    AND poh.AGENT_ID = PPNFV.PERSON_ID (+)
-    AND poapp.po_header_id (+) = poh.po_header_id
-    AND poapp.PRC_BU_ID (+) = poh.PRC_BU_ID
-    AND poapp.segment1 (+) = poh.segment1
-    AND porej.po_header_id (+) = poh.po_header_id
-    AND porej.PRC_BU_ID (+) = poh.PRC_BU_ID
-    AND porej.segment1 (+) = poh.segment1
-    AND popen.po_header_id (+) = poh.po_header_id
-    AND popen.PRC_BU_ID (+) = poh.PRC_BU_ID
-    AND popen.segment1 (+) = poh.segment1
-    AND ps.SELECTED_APPROVER = :P_SELECTED_APPROVER
-GROUP BY
-    poh.segment1, pos.segment1, hp.party_name, poh.DOCUMENT_STATUS, poh.CURRENCY_CODE,
-    fab.BU_NAME, gcc.segment1, poh.SUBMIT_DATE, poh.CREATED_BY, poh.CREATION_DATE,
-    poapp.Note1, poapp.Note2, ps.SELECTED_APPROVER, ps.APPROVAL_DATE_BY_SELECTED_APPROVER
+CASE
+    WHEN poapp.L5_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L5_APPROVED_BY
+    WHEN poapp.L4_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L4_APPROVED_BY
+    WHEN poapp.L3_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L3_APPROVED_BY
+    WHEN poapp.L2_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L2_APPROVED_BY
+    WHEN poapp.L1_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L1_APPROVED_BY
+END AS SELECTED_APPROVER,
+CASE
+    WHEN poapp.L5_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L5_APPROVED_DT
+    WHEN poapp.L4_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L4_APPROVED_DT
+    WHEN poapp.L3_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L3_APPROVED_DT
+    WHEN poapp.L2_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L2_APPROVED_DT
+    WHEN poapp.L1_APPROVED_BY = :P_SELECTED_APPROVER THEN poapp.L1_APPROVED_DT
+END AS APPROVAL_DATE_BY_SELECTED_APPROVER,
+CASE
+    WHEN poapp.L5_APPROVED_BY IS NOT NULL THEN poapp.L5_APPROVED_BY
+    WHEN poapp.L4_APPROVED_BY IS NOT NULL THEN poapp.L4_APPROVED_BY
+    WHEN poapp.L3_APPROVED_BY IS NOT NULL THEN poapp.L3_APPROVED_BY
+    WHEN poapp.L2_APPROVED_BY IS NOT NULL THEN poapp.L2_APPROVED_BY
+    ELSE NULL
+END AS PREVIOUS_APPROVER,
+CASE
+    WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
+    WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
+    WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
+    WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
+    ELSE NULL
+END AS APPROVAL_DATE_BY_PREVIOUS_APPROVER,
+(TRUNC(TO_DATE(COALESCE(poapp.L5_APPROVED_DT, poapp.L4_APPROVED_DT, poapp.L3_APPROVED_DT, poapp.L2_APPROVED_DT, poapp.L1_APPROVED_DT),'DD.MM.YYYY'))
+ - TRUNC(TO_DATE(COALESCE(poapp.L5_APPROVED_DT, poapp.L4_APPROVED_DT, poapp.L3_APPROVED_DT, poapp.L2_APPROVED_DT),'DD.MM.YYYY'))) AS TOTAL_DAYS_PENDING_FROM_PREVIOUS_APPROVER,
+(TRUNC(TO_DATE(COALESCE(poapp.L5_APPROVED_DT, poapp.L4_APPROVED_DT, poapp.L3_APPROVED_DT, poapp.L2_APPROVED_DT, poapp.L1_APPROVED_DT),'DD.MM.YYYY'))
+ - TRUNC(POH.SUBMIT_DATE)) AS TOTAL_DAYS_PENDING_FROM_SUBMISSION,
+(TRUNC(TO_DATE(COALESCE(poapp.L5_APPROVED_DT, poapp.L4_APPROVED_DT, poapp.L3_APPROVED_DT, poapp.L2_APPROVED_DT, poapp.L1_APPROVED_DT),'DD.MM.YYYY'))
+ - TRUNC(POH.SUBMIT_DATE)) AS TOTAL_DAYS_TAKEN_BY_SELECTED_APPROVER
