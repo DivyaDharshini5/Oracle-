@@ -1,5 +1,4 @@
-SELECT
-    poapp.note1,
+
 
     CASE
         WHEN INSTR(',' || :Selection_Approver || ',', ',L5,') > 0 AND poapp.L5_APPROVED_BY IS NOT NULL THEN poapp.L5_APPROVED_BY
@@ -49,3 +48,4 @@ SELECT
             ELSE NULL
         END
     ) AS TOTAL_DAYS_TAKEN_BY_SELECTED_APPROVER
+
