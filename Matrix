@@ -1,108 +1,42 @@
 poapp.note1,
 
-(
-    SELECT pa.poapp_approved_by
-    FROM po_approval pa
-    WHERE pa.po_header_id = poh.po_header_id
-      AND pa.approval_level IN (
-            SELECT REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL)
-            FROM dual CONNECT BY REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL) IS NOT NULL
-        )
-    ORDER BY pa.approval_level DESC
-    FETCH FIRST 1 ROW ONLY
-) AS SELECTED_APPROVER,
+CASE
+    WHEN INSTR(',' || :Selection_Approver || ',', ',L5,') > 0 AND poapp.L5_APPROVED_BY IS NOT NULL THEN poapp.L5_APPROVED_BY
+    WHEN INSTR(',' || :Selection_Approver || ',', ',L4,') > 0 AND poapp.L4_APPROVED_BY IS NOT NULL THEN poapp.L4_APPROVED_BY
+    WHEN INSTR(',' || :Selection_Approver || ',', ',L3,') > 0 AND poapp.L3_APPROVED_BY IS NOT NULL THEN poapp.L3_APPROVED_BY
+    WHEN INSTR(',' || :Selection_Approver || ',', ',L2,') > 0 AND poapp.L2_APPROVED_BY IS NOT NULL THEN poapp.L2_APPROVED_BY
+    WHEN INSTR(',' || :Selection_Approver || ',', ',L1,') > 0 AND poapp.L1_APPROVED_BY IS NOT NULL THEN poapp.L1_APPROVED_BY
+END AS SELECTED_APPROVER,
 
-(
-    SELECT pa.approval_dt
-    FROM po_approval pa
-    WHERE pa.po_header_id = poh.po_header_id
-      AND pa.approval_level IN (
-            SELECT REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL)
-            FROM dual CONNECT BY REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL) IS NOT NULL
-        )
-    ORDER BY pa.approval_level DESC
-    FETCH FIRST 1 ROW ONLY
-) AS APPROVAL_DATE_SELECTED,
+CASE
+    WHEN INSTR(',' || :Selection_Approver || ',', ',L5,') > 0 AND poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
+    WHEN INSTR(',' || :Selection_Approver || ',', ',L4,') > 0 AND poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
+    WHEN INSTR(',' || :Selection_Approver || ',', ',L3,') > 0 AND poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
+    WHEN INSTR(',' || :Selection_Approver || ',', ',L2,') > 0 AND poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
+    WHEN INSTR(',' || :Selection_Approver || ',', ',L1,') > 0 AND poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
+END AS APPROVAL_DATE_BY_SELECTED_APPROVER,
 
-(
-    SELECT pa.poapp_approved_by
-    FROM po_approval pa
-    WHERE pa.po_header_id = poh.po_header_id
-      AND pa.approval_level IN (
-            SELECT REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL)
-            FROM dual CONNECT BY REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL) IS NOT NULL
-        )
-    ORDER BY pa.approval_level DESC
-    OFFSET 1 ROW FETCH NEXT 1 ROW ONLY
-) AS PREVIOUS_APPROVER,
+CASE
+    WHEN poapp.L5_APPROVED_BY IS NOT NULL THEN poapp.L4_APPROVED_BY
+    WHEN poapp.L4_APPROVED_BY IS NOT NULL THEN poapp.L3_APPROVED_BY
+    WHEN poapp.L3_APPROVED_BY IS NOT NULL THEN poapp.L2_APPROVED_BY
+    WHEN poapp.L2_APPROVED_BY IS NOT NULL THEN poapp.L1_APPROVED_BY
+    ELSE NULL
+END AS PREVIOUS_APPROVER,
 
-(
-    SELECT pa.approval_dt
-    FROM po_approval pa
-    WHERE pa.po_header_id = poh.po_header_id
-      AND pa.approval_level IN (
-            SELECT REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL)
-            FROM dual CONNECT BY REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL) IS NOT NULL
-        )
-    ORDER BY pa.approval_level DESC
-    OFFSET 1 ROW FETCH NEXT 1 ROW ONLY
-) AS PREVIOUS_APPROVAL_DATE,
+CASE
+    WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
+    WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
+    WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
+    WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
+    ELSE NULL
+END AS APPROVAL_DATE_BY_PREVIOUS_APPROVER,
 
-(
-    TRUNC(
-        NVL(
-            (SELECT pa.approval_dt
-             FROM po_approval pa
-             WHERE pa.po_header_id = poh.po_header_id
-               AND pa.approval_level IN (
-                     SELECT REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL)
-                     FROM dual CONNECT BY REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL) IS NOT NULL
-                 )
-             ORDER BY pa.approval_level DESC
-             OFFSET 1 ROW FETCH NEXT 1 ROW ONLY),
-            poh.submit_date
-        )
-    ) -
-    TRUNC(
-        (SELECT pa.approval_dt
-         FROM po_approval pa
-         WHERE pa.po_header_id = poh.po_header_id
-           AND pa.approval_level IN (
-                 SELECT REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL)
-                 FROM dual CONNECT BY REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL) IS NOT NULL
-             )
-         ORDER BY pa.approval_level DESC
-         FETCH FIRST 1 ROW ONLY
-        )
-    )
-) AS TOTAL_DAYS_PENDING_FROM_PREVIOUS_APPROVER,
+(TRUNC(COALESCE(poapp.L5_APPROVED_DT, poapp.L4_APPROVED_DT, poapp.L3_APPROVED_DT, poapp.L2_APPROVED_DT, poapp.L1_APPROVED_DT)) -
+ TRUNC(COALESCE(poapp.L4_APPROVED_DT, poapp.L3_APPROVED_DT, poapp.L2_APPROVED_DT, poapp.L1_APPROVED_DT))) AS TOTAL_DAYS_PENDING_FROM_PREVIOUS_APPROVER,
 
-(
-    TRUNC(
-        (SELECT pa.approval_dt
-         FROM po_approval pa
-         WHERE pa.po_header_id = poh.po_header_id
-           AND pa.approval_level IN (
-                 SELECT REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL)
-                 FROM dual CONNECT BY REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL) IS NOT NULL
-             )
-         ORDER BY pa.approval_level DESC
-         FETCH FIRST 1 ROW ONLY
-        )
-    ) - TRUNC(poh.submit_date)
-) AS TOTAL_DAYS_PENDING_FROM_SUBMISSION,
+(TRUNC(COALESCE(poapp.L5_APPROVED_DT, poapp.L4_APPROVED_DT, poapp.L3_APPROVED_DT, poapp.L2_APPROVED_DT, poapp.L1_APPROVED_DT)) - 
+ TRUNC(POH.SUBMIT_DATE)) AS TOTAL_DAYS_PENDING_FROM_SUBMISSION,
 
-(
-    TRUNC(
-        (SELECT pa.approval_dt
-         FROM po_approval pa
-         WHERE pa.po_header_id = poh.po_header_id
-           AND pa.approval_level IN (
-                 SELECT REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL)
-                 FROM dual CONNECT BY REGEXP_SUBSTR(:P_SELECTED_LEVELS,'[^,]+',1,LEVEL) IS NOT NULL
-             )
-         ORDER BY pa.approval_level DESC
-         FETCH FIRST 1 ROW ONLY
-        )
-    ) - TRUNC(poh.submit_date)
-) AS TOTAL_DAYS_TAKEN_BY_SELECTED_APPROVER,
+(TRUNC(COALESCE(poapp.L5_APPROVED_DT, poapp.L4_APPROVED_DT, poapp.L3_APPROVED_DT, poapp.L2_APPROVED_DT, poapp.L1_APPROVED_DT)) -
+ TRUNC(POH.SUBMIT_DATE)) AS TOTAL_DAYS_TAKEN_BY_SELECTED_APPROVER
