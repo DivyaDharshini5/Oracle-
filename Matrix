@@ -1,54 +1,15 @@
-WITH PO_PENDING AS (
-    SELECT 
-        pov.po_header_id,
-        pov.segment1,
-        pov.PRC_BU_ID,
-        TO_CHAR(wf.ASSIGNEDDATE,'DD.MM.YYYY','NLS_DATE_LANGUAGE AMERICAN') AS ASSIGNEDDATE,
-        wf.ASSIGNEES,
-        CASE 
-            WHEN wf.state = 'INFO REQUESTED' THEN wf.UPDATEDBYDISPLAYNAME || ' Information Requested to ' || wf.ASSIGNEESDISPLAYNAME
-            ELSE wf.ASSIGNEESDISPLAYNAME
-        END AS ASSIGNEESDISPLAYNAME,
-        wf.APPROVERS,
-        wf.outcome,
-        wf.state,
-        wf.workflowpattern,
-        wf.title,
-        wf.componentname,
-        wf.compositename,
-        POH.SUBMIT_DATE,
-        (TRUNC(SYSDATE) - TRUNC(wf.ASSIGNEDDATE)) + 1 AS PENDING_DAYS_APPROVED,
-        (TRUNC(SYSDATE) - TRUNC(POH.SUBMIT_DATE)) + 1 AS TOTAL_DAYS
-    FROM 
-        PO_VERSIONS pov
-        JOIN PO_HEADERS_ALL poh ON pov.po_header_id = poh.po_header_id
-        JOIN FA_FUSION_SOAINFRA.WFTASK wf ON pov.approval_instance_id = wf.compositeinstanceid
-        JOIN FUN_ALL_BUSINESS_UNITS_V fab ON fab.BU_ID = poh.PRC_BU_ID
-    WHERE 
-        pov.change_order_status = 'PENDING APPROVAL'
-        AND wf.state IN ('ASSIGNED','INFO REQUESTED')
-        AND wf.assignees IS NOT NULL
-        AND wf.workflowpattern NOT IN ('AGGREGATION','PYI')
-        AND wf.componentname = 'Document Approval'
-        AND fab.BU_NAME = NVL(:P_BU_NAME, fab.BU_NAME)
-)
-SELECT DISTINCT APPROVER
+SELECT DISTINCT approver AS display_value,
+                approver AS return_value
 FROM (
-    SELECT ppnfv.full_name AS APPROVER
-    FROM PER_PERSON_NAMES FV PPNFV
-    JOIN PO_PENDING popen ON ppnfv.PERSON_ID = popen.ASSIGNEES
-    WHERE ppnfv.full_name IS NOT NULL
-
-    UNION ALL
-
-    SELECT popen.ASSIGNEESDISPLAYNAME AS APPROVER
-    FROM PO_PENDING popen
-    WHERE popen.ASSIGNEESDISPLAYNAME IS NOT NULL
-
-    UNION ALL
-
-    SELECT popen.UPDATEDBYDISPLAYNAME AS APPROVER
-    FROM PO_PENDING popen
-    WHERE popen.UPDATEDBYDISPLAYNAME IS NOT NULL
-) t
-ORDER BY t.APPROVER;
+    SELECT L1_APPROVED_BY AS approver FROM PO_APPROVAL
+    UNION
+    SELECT L2_APPROVED_BY FROM PO_APPROVAL
+    UNION
+    SELECT L3_APPROVED_BY FROM PO_APPROVAL
+    UNION
+    SELECT L4_APPROVED_BY FROM PO_APPROVAL
+    UNION
+    SELECT L5_APPROVED_BY FROM PO_APPROVAL
+)
+WHERE approver IS NOT NULL
+ORDER BY approver;
