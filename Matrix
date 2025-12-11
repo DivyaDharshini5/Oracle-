@@ -1,10 +1,8 @@
-<?upper-case(
-  xdoxslt:to_word(
-     TOTAL_AMOUNT
-      + ((LINE_TOTAL * 7.5) div 100)
-      - ((LINE_TOTAL * 7.5) div 100)
-      - ((LINE_TOTAL * 2)   div 100)
-      - ((LINE_TOTAL * 2)   div 100)
-      - ((LINE_TOTAL * 1)   div 100)
-  )
-)?>
+to_char(to_date(
+    TOTAL_AMOUNT
+      + ((LINE_TOTAL * 7.5) / 100)
+      - ((LINE_TOTAL * 7.5) / 100)
+      - ((LINE_TOTAL * 2)   / 100)
+      - ((LINE_TOTAL * 2)   / 100)
+      - ((LINE_TOTAL * 1)   / 100)
+, 'J'), 'JSP') AS NET_AMOUNT_WORDS
