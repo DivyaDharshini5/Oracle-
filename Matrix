@@ -1,16 +1,10 @@
-UPPER(
-  TO_CHAR(
-    TO_DATE(
-      ROUND(
-        TOTAL_AMOUNT
-        + ((LINE_TOTAL * 7.5) / 100)
-        - ((LINE_TOTAL * 7.5) / 100)
-        - ((LINE_TOTAL * 2)   / 100)
-        - ((LINE_TOTAL * 2)   / 100)
-        - ((LINE_TOTAL * 1)   / 100)
-      ),
-      'J'
-    ),
-    'JSP'
-  )
-) AS NET_AMOUNT_WORDS
+to_check_number(
+    TOTAL_AMOUNT
+    + ((LINE_TOTAL * 100) / 7.5)
+    - ((LINE_TOTAL * 7.5) / 100)
+    + ((LINE_TOTAL * 2) / 100)
+    + ((LINE_TOTAL * 2) / 100)
+    - ((LINE_TOTAL * 1) / 100),
+    DECIMAL_STYLE_WORDS,
+    'CASE_INIT_CAP'
+)
