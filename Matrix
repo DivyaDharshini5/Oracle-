@@ -1,13 +1,16 @@
-to_char(
-  to_date(
-    round(
-      TOTAL_AMOUNT
+UPPER(
+  TO_CHAR(
+    TO_DATE(
+      ROUND(
+        TOTAL_AMOUNT
         + ((LINE_TOTAL * 7.5) / 100)
         - ((LINE_TOTAL * 7.5) / 100)
         - ((LINE_TOTAL * 2)   / 100)
         - ((LINE_TOTAL * 2)   / 100)
         - ((LINE_TOTAL * 1)   / 100)
+      ),
+      'J'
     ),
-  'J'),
-'JSP'
+    'JSP'
+  )
 ) AS NET_AMOUNT_WORDS
