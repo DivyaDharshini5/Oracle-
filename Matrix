@@ -1,10 +1,39 @@
-to_check_number(
-    TOTAL_AMOUNT
-    + ((LINE_TOTAL * 100) / 7.5)
-    - ((LINE_TOTAL * 7.5) / 100)
-    + ((LINE_TOTAL * 2) / 100)
-    + ((LINE_TOTAL * 2) / 100)
-    - ((LINE_TOTAL * 1) / 100),
-    DECIMAL_STYLE_WORDS,
-    'CASE_INIT_CAP'
-)
+-- Equipment
+PRL.ATTRIBUTE4 AS Equipment,
+
+-- PO Currency
+PHA.CURRENCY_CODE AS PO_Currency,
+
+-- Unit Price
+PLA.UNIT_PRICE AS Unit_Price,
+
+-- PO Line Value (Local Currency)
+CASE 
+    WHEN potv.DESCRIPTION = 'Fixed Price Services' 
+        THEN PLA.AMOUNT
+    ELSE 
+        (PLA.UNIT_PRICE * PLA.QUANTITY)
+END AS PO_Line_Value,
+
+-- PO Line Value (USD)
+ROUND(
+    (
+        CASE 
+            WHEN potv.DESCRIPTION = 'Fixed Price Services' 
+                THEN PLA.AMOUNT
+            ELSE 
+                (PLA.UNIT_PRICE * PLA.QUANTITY)
+        END
+    )
+    *
+    NVL((
+        SELECT rat.CONVERSION_RATE
+        FROM gl_daily_rates rat
+        WHERE rat.from_currency = PHA.CURRENCY_CODE
+          AND rat.to_currency = 'USD'
+          AND TO_CHAR(rat.conversion_date, 'YYYY-MM-DD') = 
+              TO_CHAR(PLA.CREATION_DATE, 'YYYY-MM-DD')
+          AND rat.conversion_type = 'Corporate'
+          AND ROWNUM = 1
+    ),1)
+,2) AS PO_Line_Value_USD
