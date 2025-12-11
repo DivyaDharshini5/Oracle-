@@ -1,13 +1,10 @@
 <?upper-case(
-  xdoxslt:to_check_number(
+  xdoxslt:to_word(
      TOTAL_AMOUNT
       + ((LINE_TOTAL * 7.5) div 100)
       - ((LINE_TOTAL * 7.5) div 100)
       - ((LINE_TOTAL * 2)   div 100)
       - ((LINE_TOTAL * 2)   div 100)
-      - ((LINE_TOTAL * 1)   div 100),
-     'MZN',
-     'CASE_INIT_CAP',
-     'DECIMAL_STYLE_WORDS'
+      - ((LINE_TOTAL * 1)   div 100)
   )
 )?>
