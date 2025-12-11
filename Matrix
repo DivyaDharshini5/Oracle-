@@ -1,38 +1,31 @@
--- Equipment
 PRL.ATTRIBUTE4 AS Equipment,
+po_det.POCurrency AS PO_Currency,
+po_det.UnitCost AS Unit_Price,
 
--- PO Currency
-PHA.CURRENCY_CODE AS PO_Currency,
-
--- Unit Price
-PLA.UNIT_PRICE AS Unit_Price,
-
--- PO Line Value (Local Currency)
 CASE 
-    WHEN potv.DESCRIPTION = 'Fixed Price Services' 
-        THEN PLA.AMOUNT
+    WHEN po_det.DESCRIPTION = 'Fixed Price Services'
+        THEN po_det.POItemAmount
     ELSE 
-        (PLA.UNIT_PRICE * PLA.QUANTITY)
+        (po_det.UnitCost * po_det.POItemQuantity)
 END AS PO_Line_Value,
 
--- PO Line Value (USD)
 ROUND(
     (
         CASE 
-            WHEN potv.DESCRIPTION = 'Fixed Price Services' 
-                THEN PLA.AMOUNT
+            WHEN po_det.DESCRIPTION = 'Fixed Price Services'
+                THEN po_det.POItemAmount
             ELSE 
-                (PLA.UNIT_PRICE * PLA.QUANTITY)
+                (po_det.UnitCost * po_det.POItemQuantity)
         END
     )
     *
     NVL((
         SELECT rat.CONVERSION_RATE
         FROM gl_daily_rates rat
-        WHERE rat.from_currency = PHA.CURRENCY_CODE
+        WHERE rat.from_currency = po_det.POCurrency
           AND rat.to_currency = 'USD'
-          AND TO_CHAR(rat.conversion_date, 'YYYY-MM-DD') = 
-              TO_CHAR(PLA.CREATION_DATE, 'YYYY-MM-DD')
+          AND TO_CHAR(rat.conversion_date, 'YYYY-MM-DD') =
+              TO_CHAR(po_det.PODATEI, 'YYYY-MM-DD')
           AND rat.conversion_type = 'Corporate'
           AND ROWNUM = 1
     ),1)
