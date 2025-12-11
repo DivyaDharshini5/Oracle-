@@ -1,1 +1,13 @@
-<?TO_CHAR(FLOOR(TOTAL_AMOUNT_AED), 'JSP')?><?if: TOTAL_AMOUNT_AED != FLOOR(TOTAL_AMOUNT_AED)?> and <?FORMAT-NUMBER((TOTAL_AMOUNT_AED - FLOOR(TOTAL_AMOUNT_AED))*100, '00')?>/100<?end if?>
+<?upper-case(
+  xdoxslt:to_check_number(
+     TOTAL_AMOUNT
+      + ((LINE_TOTAL * 7.5) div 100)
+      - ((LINE_TOTAL * 7.5) div 100)
+      - ((LINE_TOTAL * 2)   div 100)
+      - ((LINE_TOTAL * 2)   div 100)
+      - ((LINE_TOTAL * 1)   div 100),
+     'MZN',
+     'CASE_INIT_CAP',
+     'DECIMAL_STYLE_WORDS'
+  )
+)?>
