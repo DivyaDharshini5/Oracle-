@@ -1,6 +1,10 @@
-CASE 
-    WHEN po_det.DESCRIPTION = 'Fixed Price Services'
-        THEN po_det.POAMOUNT
-    ELSE 
-        (po_det.UnitCost * po_det.POItemQuantity)
-END AS PO_Line_Value
+
+pla.quantity                 AS po_item_quantity,
+pla.uom_code                 AS normal_uom,
+NVL(pda.quantity_delivered,0) AS po_quantity_delivered,
+(
+ SELECT SUM(rt.quantity)
+ FROM rcv_transactions rt
+ WHERE rt.po_line_id = pla.po_line_id
+   AND rt.transaction_type = 'RECEIVE'
+) AS po_quantity_received
