@@ -1,3 +1,4 @@
+
 <?xdofx:
 sum(
   decode(LINE_DESCRIPTION,'BREAK FAST',(QUANTITY*100) div 80)
