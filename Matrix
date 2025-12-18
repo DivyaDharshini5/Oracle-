@@ -1,10 +1,8 @@
-
-pla.quantity                 AS po_item_quantity,
-pla.uom_code                 AS normal_uom,
-NVL(pda.quantity_delivered,0) AS po_quantity_delivered,
-(
- SELECT SUM(rt.quantity)
- FROM rcv_transactions rt
- WHERE rt.po_line_id = pla.po_line_id
-   AND rt.transaction_type = 'RECEIVE'
-) AS po_quantity_received
+<?xdofx:
+sum(
+  decode(LINE_DESCRIPTION,'BREAK FAST',(QUANTITY*100) div 80)
++ decode(LINE_DESCRIPTION,'LUNCH',(QUANTITY*100) div 80)
++ decode(LINE_DESCRIPTION,'DINNER',(QUANTITY*100) div 80)
++ decode(LINE_DESCRIPTION,'LODGING',(QUANTITY*100) div 80)
+)
+?>
