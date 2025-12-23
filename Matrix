@@ -1,76 +1,36 @@
-, po_details AS (
-    SELECT
-        hp.party_name                     AS vendor_name,
-        pozs.segment1                    AS vendor_code,
-        pha.segment1                     AS po_number,
-        hou.name                         AS po_company_name,
+SELECT
+    hou.name                      AS req_bu,
+    prh.requisition_number        AS requisition_no,
+    prl.line_num                  AS req_line_number,
+    prl.item_description          AS req_item_description,
+    prl.quantity                  AS req_item_quantity,
+    prl.currency_code             AS pr_currency,
 
-        TRUNC(pha.creation_date)         AS po_date,
+    rfq.rfqnumber,
+    rfq.quote_num,
 
-        pla.quantity                     AS po_item_quantity,
-        pla.unit_price                   AS unit_cost,
-        pha.currency_code                AS po_currency,
+    po.po_number,
+    po.vendor_name,
+    po.po_date,
+    po.po_amount,
+    po.po_currency,
+    po.po_approved_by
 
-        CASE
-            WHEN potv.description = 'Fixed Price Services'
-            THEN pla.amount
-            ELSE pla.unit_price * pla.quantity
-        END                              AS po_amount,
+FROM por_requisition_headers_all prh,
+     por_requisition_lines_all   prl,
+     hr_operating_units          hou,
+     rfq_details                 rfq,
+     po_details                  po
+WHERE prh.requisition_header_id = prl.requisition_header_id
+  AND prh.req_bu_id             = hou.organization_id
 
-        pda.req_distribution_id          AS po_req_distribution_id,
-        prla.requisition_line_id         AS po_req_line_id,
-        prha.requisition_header_id       AS po_req_header_id,
+  -- ✅ DATE FIX (THIS IS WHY TODAY NOW COMES)
+  AND TRUNC(prh.creation_date) BETWEEN
+        NVL(:P_REQ_FROM_DATE, TRUNC(prh.creation_date))
+    AND NVL(:P_REQ_TO_DATE,   TRUNC(prh.creation_date))
 
-        pha.document_status              AS po_doc_status,
+  AND rfq.requisition_header_id(+) = prh.requisition_header_id
+  AND rfq.requisition_line_id(+)   = prl.requisition_line_id
 
-        pla.line_num                     AS po_line_num,
-        pha.po_header_id,
-
-        -- ✅ PO APPROVED BY (FIXED)
-        (
-            SELECT ppnf.full_name
-            FROM po_action_history pah,
-                 per_person_names_f_v ppnf
-            WHERE pah.object_id = pha.po_header_id
-              AND pah.object_type_code = 'PO'
-              AND pah.action_code = 'APPROVE'
-              AND pah.performer_id = ppnf.person_id
-              AND ppnf.name_type = 'GLOBAL'
-              AND TRUNC(SYSDATE) BETWEEN ppnf.effective_start_date
-                                      AND ppnf.effective_end_date
-              AND pah.sequence_num = (
-                    SELECT MAX(pah1.sequence_num)
-                    FROM po_action_history pah1
-                    WHERE pah1.object_id = pah.object_id
-                      AND pah1.object_type_code = 'PO'
-                      AND pah1.action_code = 'APPROVE'
-              )
-              AND pah.po_version_id = (
-                    SELECT MAX(pah2.po_version_id)
-                    FROM po_action_history pah2
-                    WHERE pah2.object_id = pah.object_id
-                      AND pah2.object_type_code = 'PO'
-              )
-        ) AS po_approved_by
-
-    FROM po_headers_all pha,
-         po_lines_all pla,
-         po_line_types_vl potv,
-         po_distributions_all pda,
-         poz_suppliers pozs,
-         hz_parties hp,
-         hr_operating_units hou,
-         por_req_distributions_all prda,
-         por_requisition_lines_all prla,
-         por_requisition_headers_all prha
-    WHERE pha.po_header_id      = pla.po_header_id
-      AND pla.line_type_id      = potv.line_type_id
-      AND pda.po_header_id      = pha.po_header_id
-      AND pda.po_line_id        = pla.po_line_id
-      AND pha.vendor_id         = pozs.vendor_id
-      AND pozs.party_id         = hp.party_id
-      AND pda.req_distribution_id = prda.distribution_id
-      AND prda.requisition_line_id = prla.requisition_line_id
-      AND prla.requisition_header_id = prha.requisition_header_id
-      AND pha.req_bu_id         = hou.organization_id
-)
+  AND po.po_req_header_id(+)       = prh.requisition_header_id
+  AND po.po_req_line_id(+)         = prl.requisition_line_id;
