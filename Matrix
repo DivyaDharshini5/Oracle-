@@ -1,9 +1,39 @@
+WITH rfq_details AS (
+    SELECT
+        pdst.negotiation_display_name      AS rfqdisplay,
+        paha.document_number               AS rfqnumber,
+        prh.requisition_header_id,
+        prl.requisition_line_id,
 
-<?xdofx:
-sum(
-  decode(LINE_DESCRIPTION,'BREAK FAST',(QUANTITY*100) div 80)
-+ decode(LINE_DESCRIPTION,'LUNCH',(QUANTITY*100) div 80)
-+ decode(LINE_DESCRIPTION,'DINNER',(QUANTITY*100) div 80)
-+ decode(LINE_DESCRIPTION,'LODGING',(QUANTITY*100) div 80)
+        TRUNC(paha.creation_date)          AS rfqcreateddate,
+        ppnfv.display_name                 AS rfqissuedby,
+
+        TRUNC(paha.publish_date)           AS rfqissueddate,
+
+        TRUNC(paha.award_complete_date)    AS quote_award_date,
+        pbh.bid_number                     AS quote_num,
+        pbipa.note_to_auction_owner        AS itemdeviation_remarks,
+
+        TRUNC(pbh.bid_expiration_date)     AS quote_valid_until
+
+    FROM por_requisition_headers_all prh,
+         por_requisition_lines_all   prl,
+         pon_auction_headers_all     paha,
+         pon_doctype_styles_tl       pdst,
+         per_person_names_f_v        ppnfv,
+         pon_bid_headers             pbh,
+         pon_backing_requisitions    pbr,
+         pon_bid_item_prices         pbipa
+    WHERE prh.requisition_header_id = prl.requisition_header_id
+      AND paha.auction_header_id    = prl.auction_header_id
+      AND pdst.doctype_id           = paha.doctype_id
+      AND pdst.style_id             = paha.style_id
+      AND pdst.language             = USERENV('LANG')
+      AND paha.person_id            = ppnfv.person_id(+)
+      AND TRUNC(SYSDATE) BETWEEN ppnfv.effective_start_date(+)
+                              AND ppnfv.effective_end_date(+)
+      AND paha.auction_header_id    = pbh.auction_header_id(+)
+      AND paha.auction_header_id    = pbr.auction_header_id(+)
+      AND prl.requisition_line_id   = pbr.split_req_line_id(+)
+      AND pbh.bid_number            = pbipa.bid_number(+)
 )
-?>
