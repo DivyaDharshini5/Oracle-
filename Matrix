@@ -1,39 +1,76 @@
-WITH rfq_details AS (
+, po_details AS (
     SELECT
-        pdst.negotiation_display_name      AS rfqdisplay,
-        paha.document_number               AS rfqnumber,
-        prh.requisition_header_id,
-        prl.requisition_line_id,
+        hp.party_name                     AS vendor_name,
+        pozs.segment1                    AS vendor_code,
+        pha.segment1                     AS po_number,
+        hou.name                         AS po_company_name,
 
-        TRUNC(paha.creation_date)          AS rfqcreateddate,
-        ppnfv.display_name                 AS rfqissuedby,
+        TRUNC(pha.creation_date)         AS po_date,
 
-        TRUNC(paha.publish_date)           AS rfqissueddate,
+        pla.quantity                     AS po_item_quantity,
+        pla.unit_price                   AS unit_cost,
+        pha.currency_code                AS po_currency,
 
-        TRUNC(paha.award_complete_date)    AS quote_award_date,
-        pbh.bid_number                     AS quote_num,
-        pbipa.note_to_auction_owner        AS itemdeviation_remarks,
+        CASE
+            WHEN potv.description = 'Fixed Price Services'
+            THEN pla.amount
+            ELSE pla.unit_price * pla.quantity
+        END                              AS po_amount,
 
-        TRUNC(pbh.bid_expiration_date)     AS quote_valid_until
+        pda.req_distribution_id          AS po_req_distribution_id,
+        prla.requisition_line_id         AS po_req_line_id,
+        prha.requisition_header_id       AS po_req_header_id,
 
-    FROM por_requisition_headers_all prh,
-         por_requisition_lines_all   prl,
-         pon_auction_headers_all     paha,
-         pon_doctype_styles_tl       pdst,
-         per_person_names_f_v        ppnfv,
-         pon_bid_headers             pbh,
-         pon_backing_requisitions    pbr,
-         pon_bid_item_prices         pbipa
-    WHERE prh.requisition_header_id = prl.requisition_header_id
-      AND paha.auction_header_id    = prl.auction_header_id
-      AND pdst.doctype_id           = paha.doctype_id
-      AND pdst.style_id             = paha.style_id
-      AND pdst.language             = USERENV('LANG')
-      AND paha.person_id            = ppnfv.person_id(+)
-      AND TRUNC(SYSDATE) BETWEEN ppnfv.effective_start_date(+)
-                              AND ppnfv.effective_end_date(+)
-      AND paha.auction_header_id    = pbh.auction_header_id(+)
-      AND paha.auction_header_id    = pbr.auction_header_id(+)
-      AND prl.requisition_line_id   = pbr.split_req_line_id(+)
-      AND pbh.bid_number            = pbipa.bid_number(+)
+        pha.document_status              AS po_doc_status,
+
+        pla.line_num                     AS po_line_num,
+        pha.po_header_id,
+
+        -- ✅ PO APPROVED BY (FIXED)
+        (
+            SELECT ppnf.full_name
+            FROM po_action_history pah,
+                 per_person_names_f_v ppnf
+            WHERE pah.object_id = pha.po_header_id
+              AND pah.object_type_code = 'PO'
+              AND pah.action_code = 'APPROVE'
+              AND pah.performer_id = ppnf.person_id
+              AND ppnf.name_type = 'GLOBAL'
+              AND TRUNC(SYSDATE) BETWEEN ppnf.effective_start_date
+                                      AND ppnf.effective_end_date
+              AND pah.sequence_num = (
+                    SELECT MAX(pah1.sequence_num)
+                    FROM po_action_history pah1
+                    WHERE pah1.object_id = pah.object_id
+                      AND pah1.object_type_code = 'PO'
+                      AND pah1.action_code = 'APPROVE'
+              )
+              AND pah.po_version_id = (
+                    SELECT MAX(pah2.po_version_id)
+                    FROM po_action_history pah2
+                    WHERE pah2.object_id = pah.object_id
+                      AND pah2.object_type_code = 'PO'
+              )
+        ) AS po_approved_by
+
+    FROM po_headers_all pha,
+         po_lines_all pla,
+         po_line_types_vl potv,
+         po_distributions_all pda,
+         poz_suppliers pozs,
+         hz_parties hp,
+         hr_operating_units hou,
+         por_req_distributions_all prda,
+         por_requisition_lines_all prla,
+         por_requisition_headers_all prha
+    WHERE pha.po_header_id      = pla.po_header_id
+      AND pla.line_type_id      = potv.line_type_id
+      AND pda.po_header_id      = pha.po_header_id
+      AND pda.po_line_id        = pla.po_line_id
+      AND pha.vendor_id         = pozs.vendor_id
+      AND pozs.party_id         = hp.party_id
+      AND pda.req_distribution_id = prda.distribution_id
+      AND prda.requisition_line_id = prla.requisition_line_id
+      AND prla.requisition_header_id = prha.requisition_header_id
+      AND pha.req_bu_id         = hou.organization_id
 )
