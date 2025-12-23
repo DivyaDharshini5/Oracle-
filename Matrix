@@ -1,8 +1,8 @@
 AND (
        :P_REQ_FROM_DATE IS NULL
-    OR TRUNC(PRHA.creation_date) >= TRUNC(CAST(:P_REQ_FROM_DATE AS DATE))
+    OR TRUNC(PRH.creation_date) >= TRUNC(CAST(:P_REQ_FROM_DATE AS DATE))
     )
 AND (
        :P_REQ_TO_DATE IS NULL
-    OR TRUNC(PRHA.creation_date) <= TRUNC(CAST(:P_REQ_TO_DATE AS DATE))
+    OR TRUNC(PRH.creation_date) <= TRUNC(CAST(:P_REQ_TO_DATE AS DATE))
     )
