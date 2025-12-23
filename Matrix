@@ -1,36 +1,8 @@
-SELECT
-    hou.name                      AS req_bu,
-    prh.requisition_number        AS requisition_no,
-    prl.line_num                  AS req_line_number,
-    prl.item_description          AS req_item_description,
-    prl.quantity                  AS req_item_quantity,
-    prl.currency_code             AS pr_currency,
-
-    rfq.rfqnumber,
-    rfq.quote_num,
-
-    po.po_number,
-    po.vendor_name,
-    po.po_date,
-    po.po_amount,
-    po.po_currency,
-    po.po_approved_by
-
-FROM por_requisition_headers_all prh,
-     por_requisition_lines_all   prl,
-     hr_operating_units          hou,
-     rfq_details                 rfq,
-     po_details                  po
-WHERE prh.requisition_header_id = prl.requisition_header_id
-  AND prh.req_bu_id             = hou.organization_id
-
-  -- ✅ DATE FIX (THIS IS WHY TODAY NOW COMES)
-  AND TRUNC(prh.creation_date) BETWEEN
-        NVL(:P_REQ_FROM_DATE, TRUNC(prh.creation_date))
-    AND NVL(:P_REQ_TO_DATE,   TRUNC(prh.creation_date))
-
-  AND rfq.requisition_header_id(+) = prh.requisition_header_id
-  AND rfq.requisition_line_id(+)   = prl.requisition_line_id
-
-  AND po.po_req_header_id(+)       = prh.requisition_header_id
-  AND po.po_req_line_id(+)         = prl.requisition_line_id;
+AND (
+       :P_REQ_FROM_DATE IS NULL
+    OR TRUNC(PRHA.creation_date) >= TRUNC(CAST(:P_REQ_FROM_DATE AS DATE))
+    )
+AND (
+       :P_REQ_TO_DATE IS NULL
+    OR TRUNC(PRHA.creation_date) <= TRUNC(CAST(:P_REQ_TO_DATE AS DATE))
+    )
