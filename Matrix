@@ -1,8 +1,20 @@
-AND (
-       :P_REQ_FROM_DATE IS NULL
-    OR TRUNC(PRH.creation_date) >= TRUNC(CAST(:P_REQ_FROM_DATE AS DATE))
-    )
-AND (
-       :P_REQ_TO_DATE IS NULL
-    OR TRUNC(PRH.creation_date) <= TRUNC(CAST(:P_REQ_TO_DATE AS DATE))
-    )
+
+SELECT
+    TO_CHAR(:P_REQ_FROM_DATE, 'DD MON YYYY', 'NLS_DATE_LANGUAGE=AMERICAN') AS start_date,
+    TO_CHAR(:P_REQ_TO_DATE,   'DD MON YYYY', 'NLS_DATE_LANGUAGE=AMERICAN') AS end_date,
+
+    NVL(:P_REQ_NUMBER, 'All')        AS p_req_number,
+    NVL(:P_REQ_STATUS, 'All')        AS p_req_status,
+
+    NVL(
+        ( SELECT LISTAGG(hou.name, ', ') WITHIN GROUP (ORDER BY hou.name)
+          FROM hr_operating_units hou
+          WHERE hou.organization_id IN (:P_BU_NAME)
+        ),
+        'All'
+    ) AS reqbu,
+
+    NVL(:P_PO_STATUS, 'All')         AS p_po_status,
+    NVL(:P_REQCREATEDBY, 'All')      AS preqcreatedby,
+    NVL(:P_REQSITEVESSEL, 'All')     AS preqsitevessel
+FROM dual;
