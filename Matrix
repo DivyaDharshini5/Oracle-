@@ -1,20 +1,31 @@
+LEVEL1:
+Initial approval authority in the workflow.
+Typically operational or department-level approver roles.
 
-SELECT
-    TO_CHAR(:P_REQ_FROM_DATE, 'DD MON YYYY', 'NLS_DATE_LANGUAGE=AMERICAN') AS start_date,
-    TO_CHAR(:P_REQ_TO_DATE,   'DD MON YYYY', 'NLS_DATE_LANGUAGE=AMERICAN') AS end_date,
+LEVEL2:
+Second-level approval providing functional or managerial review.
+Usually purchasing, finance, or line management roles.
 
-    NVL(:P_REQ_NUMBER, 'All')        AS p_req_number,
-    NVL(:P_REQ_STATUS, 'All')        AS p_req_status,
+LEVEL3:
+Senior functional approval level.
+Ensures compliance with financial, procurement, or governance rules.
 
-    NVL(
-        ( SELECT LISTAGG(hou.name, ', ') WITHIN GROUP (ORDER BY hou.name)
-          FROM hr_operating_units hou
-          WHERE hou.organization_id IN (:P_BU_NAME)
-        ),
-        'All'
-    ) AS reqbu,
+LEVEL4:
+Advanced or specialized approval authority.
+Used for high-value, legal, HR, or risk-related reviews.
 
-    NVL(:P_PO_STATUS, 'All')         AS p_po_status,
-    NVL(:P_REQCREATEDBY, 'All')      AS preqcreatedby,
-    NVL(:P_REQSITEVESSEL, 'All')     AS preqsitevessel
-FROM dual;
+LEVEL5:
+Senior management approval level.
+Applied to critical or high-impact transactions.
+
+LEVEL6:
+Upper management or corporate approval authority.
+Triggered for strategic or very high-value requests.
+
+LEVEL7:
+Executive-level approval authority.
+Used only for exceptional or escalated cases.
+
+LEVEL8:
+Highest approval authority in the workflow.
+Reserved for top executive or governance approvals.
