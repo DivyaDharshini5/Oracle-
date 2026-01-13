@@ -1,31 +1,5 @@
-LEVEL1:
-Initial approval authority in the workflow.
-Typically operational or department-level approver roles.
-
-LEVEL2:
-Second-level approval providing functional or managerial review.
-Usually purchasing, finance, or line management roles.
-
-LEVEL3:
-Senior functional approval level.
-Ensures compliance with financial, procurement, or governance rules.
-
-LEVEL4:
-Advanced or specialized approval authority.
-Used for high-value, legal, HR, or risk-related reviews.
-
-LEVEL5:
-Senior management approval level.
-Applied to critical or high-impact transactions.
-
-LEVEL6:
-Upper management or corporate approval authority.
-Triggered for strategic or very high-value requests.
-
-LEVEL7:
-Executive-level approval authority.
-Used only for exceptional or escalated cases.
-
-LEVEL8:
-Highest approval authority in the workflow.
-Reserved for top executive or governance approvals.
+{
+  "fileName": "AP_Invoice_Report.pdf",
+  "contentType": "application/pdf",
+  "reportContent": "JVBERi0xLjQKJcfsj6IKNSAwIG9iago8PC9UeXBlL1BhZ2UvUGFyZW50IDEgMCBSCj4+CmVuZG9iag=="
+}
