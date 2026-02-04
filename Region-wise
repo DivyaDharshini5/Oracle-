@@ -21,79 +21,53 @@ rules AS (
     SELECT
         rul.rule_id,
         rul.display_rule_name AS rule_name,
-        rul.conditions_string AS condition_string,
-        rul.active_flag AS is_active,
-        rul.task_id
+        rul.conditions_string,
+        rul.active_flag
     FROM por_amx_rules rul
     WHERE rul.sandbox_flag = 'Y'
 ),
 
-participants AS (
+group_users AS (
     SELECT
-        part.approval_group_name,
-        part.participant_name,
-        part.email_address
-    FROM por_amx_participants part
-    WHERE part.sandbox_flag = 'Y'
+        g.approval_group_name,
+        LISTAGG(u.user_name, ', ')
+            WITHIN GROUP (ORDER BY u.user_name) AS users
+    FROM por_amx_approval_groups g
+    JOIN por_amx_approval_group_members gm
+         ON gm.approval_group_id = g.approval_group_id
+    JOIN fnd_user u
+         ON u.user_id = gm.user_id
+    WHERE g.sandbox_flag = 'Y'
+    GROUP BY g.approval_group_name
 )
 
 SELECT
     r.rule_id,
     r.rule_name,
-    r.condition_string,
-    r.is_active,
+    r.conditions_string,
+    r.active_flag,
     a.action,
 
-    /* Level 1 */
-    (SELECT LISTAGG(p.participant_name, ', ')
-            WITHIN GROUP (ORDER BY p.participant_name)
-     FROM participants p
-     WHERE p.approval_group_name = a.level1_grp) AS level1_person,
-
-    /* Level 2 */
-    (SELECT LISTAGG(p.participant_name, ', ')
-            WITHIN GROUP (ORDER BY p.participant_name)
-     FROM participants p
-     WHERE p.approval_group_name = a.level2_grp) AS level2_person,
-
-    /* Level 3 */
-    (SELECT LISTAGG(p.participant_name, ', ')
-            WITHIN GROUP (ORDER BY p.participant_name)
-     FROM participants p
-     WHERE p.approval_group_name = a.level3_grp) AS level3_person,
-
-    /* Level 4 */
-    (SELECT LISTAGG(p.participant_name, ', ')
-            WITHIN GROUP (ORDER BY p.participant_name)
-     FROM participants p
-     WHERE p.approval_group_name = a.level4_grp) AS level4_person,
-
-    /* Level 5 */
-    (SELECT LISTAGG(p.participant_name, ', ')
-            WITHIN GROUP (ORDER BY p.participant_name)
-     FROM participants p
-     WHERE p.approval_group_name = a.level5_grp) AS level5_person,
-
-    /* Level 6 */
-    (SELECT LISTAGG(p.participant_name, ', ')
-            WITHIN GROUP (ORDER BY p.participant_name)
-     FROM participants p
-     WHERE p.approval_group_name = a.level6_grp) AS level6_person,
-
-    /* Level 7 */
-    (SELECT LISTAGG(p.participant_name, ', ')
-            WITHIN GROUP (ORDER BY p.participant_name)
-     FROM participants p
-     WHERE p.approval_group_name = a.level7_grp) AS level7_person,
-
-    /* Level 8 */
-    (SELECT LISTAGG(p.participant_name, ', ')
-            WITHIN GROUP (ORDER BY p.participant_name)
-     FROM participants p
-     WHERE p.approval_group_name = a.level8_grp) AS level8_person
+    gu1.users AS level1_users,
+    gu2.users AS level2_users,
+    gu3.users AS level3_users,
+    gu4.users AS level4_users,
+    gu5.users AS level5_users,
+    gu6.users AS level6_users,
+    gu7.users AS level7_users,
+    gu8.users AS level8_users
 
 FROM actions a
 JOIN rules r
   ON r.rule_id = a.rule_id
+
+LEFT JOIN group_users gu1 ON gu1.approval_group_name = a.level1_grp
+LEFT JOIN group_users gu2 ON gu2.approval_group_name = a.level2_grp
+LEFT JOIN group_users gu3 ON gu3.approval_group_name = a.level3_grp
+LEFT JOIN group_users gu4 ON gu4.approval_group_name = a.level4_grp
+LEFT JOIN group_users gu5 ON gu5.approval_group_name = a.level5_grp
+LEFT JOIN group_users gu6 ON gu6.approval_group_name = a.level6_grp
+LEFT JOIN group_users gu7 ON gu7.approval_group_name = a.level7_grp
+LEFT JOIN group_users gu8 ON gu8.approval_group_name = a.level8_grp
 
 ORDER BY r.rule_id, a.action;
