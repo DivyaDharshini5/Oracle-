@@ -1,55 +1,99 @@
-(
-    TRUNC(
-        CASE 
-            WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
-            WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
-            WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
-            WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
-            WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
-        END
-    )
-    -
-    TRUNC(
-        CASE 
-            WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
-            WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
-            WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
-            WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
-            ELSE NULL
-        END
-    )
-) AS TOTAL_DAYS_PENDING_PREVIOUS,
+WITH actions AS (
+    SELECT
+        act.rule_id,
+        act.action_code AS action,
 
+        MAX(CASE WHEN act.action_number = 1 THEN act.approval_group_name END) AS level1_grp,
+        MAX(CASE WHEN act.action_number = 2 THEN act.approval_group_name END) AS level2_grp,
+        MAX(CASE WHEN act.action_number = 3 THEN act.approval_group_name END) AS level3_grp,
+        MAX(CASE WHEN act.action_number = 4 THEN act.approval_group_name END) AS level4_grp,
+        MAX(CASE WHEN act.action_number = 5 THEN act.approval_group_name END) AS level5_grp,
+        MAX(CASE WHEN act.action_number = 6 THEN act.approval_group_name END) AS level6_grp,
+        MAX(CASE WHEN act.action_number = 7 THEN act.approval_group_name END) AS level7_grp,
+        MAX(CASE WHEN act.action_number = 8 THEN act.approval_group_name END) AS level8_grp
 
+    FROM por_amx_actions act
+    WHERE act.sandbox_flag = 'Y'
+    GROUP BY act.rule_id, act.action_code
+),
 
------------------------------+++++++++++++++++++++++++++++++++++++±
-(
-    TRUNC(
-        CASE 
-            WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
-            WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
-            WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
-            WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
-            WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
-        END
-    )
-    -
-    TRUNC( popen.ASSIGNEDDATE )
-) AS TOTAL_DAYS_SELECTED_APPROVER,
+rules AS (
+    SELECT
+        rul.rule_id,
+        rul.display_rule_name AS rule_name,
+        rul.conditions_string AS condition_string,
+        rul.active_flag AS is_active,
+        rul.task_id
+    FROM por_amx_rules rul
+    WHERE rul.sandbox_flag = 'Y'
+),
 
+participants AS (
+    SELECT
+        part.approval_group_name,
+        part.participant_name,
+        part.email_address
+    FROM por_amx_participants part
+    WHERE part.sandbox_flag = 'Y'
+)
 
+SELECT
+    r.rule_id,
+    r.rule_name,
+    r.condition_string,
+    r.is_active,
+    a.action,
 
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-(
-    TRUNC(
-        CASE 
-            WHEN poapp.L5_APPROVED_DT IS NOT NULL THEN poapp.L5_APPROVED_DT
-            WHEN poapp.L4_APPROVED_DT IS NOT NULL THEN poapp.L4_APPROVED_DT
-            WHEN poapp.L3_APPROVED_DT IS NOT NULL THEN poapp.L3_APPROVED_DT
-            WHEN poapp.L2_APPROVED_DT IS NOT NULL THEN poapp.L2_APPROVED_DT
-            WHEN poapp.L1_APPROVED_DT IS NOT NULL THEN poapp.L1_APPROVED_DT
-        END
-    )
-    -
-    TRUNC( poh.submit_date )
-) AS TOTAL_DAYS_FROM_SUBMISSION,
+    /* Level 1 */
+    (SELECT LISTAGG(p.participant_name, ', ')
+            WITHIN GROUP (ORDER BY p.participant_name)
+     FROM participants p
+     WHERE p.approval_group_name = a.level1_grp) AS level1_person,
+
+    /* Level 2 */
+    (SELECT LISTAGG(p.participant_name, ', ')
+            WITHIN GROUP (ORDER BY p.participant_name)
+     FROM participants p
+     WHERE p.approval_group_name = a.level2_grp) AS level2_person,
+
+    /* Level 3 */
+    (SELECT LISTAGG(p.participant_name, ', ')
+            WITHIN GROUP (ORDER BY p.participant_name)
+     FROM participants p
+     WHERE p.approval_group_name = a.level3_grp) AS level3_person,
+
+    /* Level 4 */
+    (SELECT LISTAGG(p.participant_name, ', ')
+            WITHIN GROUP (ORDER BY p.participant_name)
+     FROM participants p
+     WHERE p.approval_group_name = a.level4_grp) AS level4_person,
+
+    /* Level 5 */
+    (SELECT LISTAGG(p.participant_name, ', ')
+            WITHIN GROUP (ORDER BY p.participant_name)
+     FROM participants p
+     WHERE p.approval_group_name = a.level5_grp) AS level5_person,
+
+    /* Level 6 */
+    (SELECT LISTAGG(p.participant_name, ', ')
+            WITHIN GROUP (ORDER BY p.participant_name)
+     FROM participants p
+     WHERE p.approval_group_name = a.level6_grp) AS level6_person,
+
+    /* Level 7 */
+    (SELECT LISTAGG(p.participant_name, ', ')
+            WITHIN GROUP (ORDER BY p.participant_name)
+     FROM participants p
+     WHERE p.approval_group_name = a.level7_grp) AS level7_person,
+
+    /* Level 8 */
+    (SELECT LISTAGG(p.participant_name, ', ')
+            WITHIN GROUP (ORDER BY p.participant_name)
+     FROM participants p
+     WHERE p.approval_group_name = a.level8_grp) AS level8_person
+
+FROM actions a
+JOIN rules r
+  ON r.rule_id = a.rule_id
+
+ORDER BY r.rule_id, a.action;
