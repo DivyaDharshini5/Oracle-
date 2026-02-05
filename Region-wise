@@ -1,7 +1,7 @@
-WITH actions AS (WITH actions AS (
+WITH actions AS (
     SELECT
-        act.action_code AS action,
         act.rule_id,
+        act.action_code,
 
         MAX(CASE WHEN act.action_number = 1 THEN act.approval_group_name END) AS level1,
         MAX(CASE WHEN act.action_number = 2 THEN act.approval_group_name END) AS level2,
@@ -11,114 +11,75 @@ WITH actions AS (WITH actions AS (
         MAX(CASE WHEN act.action_number = 6 THEN act.approval_group_name END) AS level6,
         MAX(CASE WHEN act.action_number = 7 THEN act.approval_group_name END) AS level7,
         MAX(CASE WHEN act.action_number = 8 THEN act.approval_group_name END) AS level8
+
     FROM por_amx_actions_vl act
     WHERE act.sandbox_flag = 'Y'
-    GROUP BY act.action_code, act.rule_id
+    GROUP BY act.rule_id, act.action_code
 )
 
 SELECT
     rul.rule_id,
     rul.display_rule_name AS rule_name,
-    actions.action,
+    actions.action_code,
 
-    actions.level1        AS level1_group,
-    pu1.user_name         AS level1_user,
-    pu1.email_address     AS level1_email,
+    actions.level1,
+    pg1.member AS level1_member,
 
     actions.level2,
-    pu2.user_name,
-    pu2.email_address,
+    pg2.member AS level2_member,
 
     actions.level3,
-    pu3.user_name,
-    pu3.email_address,
+    pg3.member AS level3_member,
 
     actions.level4,
-    pu4.user_name,
-    pu4.email_address,
+    pg4.member AS level4_member,
 
     actions.level5,
-    pu5.user_name,
-    pu5.email_address,
+    pg5.member AS level5_member,
 
     actions.level6,
-    pu6.user_name,
-    pu6.email_address,
+    pg6.member AS level6_member,
 
     actions.level7,
-    pu7.user_name,
-    pu7.email_address,
+    pg7.member AS level7_member,
 
     actions.level8,
-    pu8.user_name,
-    pu8.email_address
+    pg8.member AS level8_member
 
 FROM por_amx_rules_vl rul
 JOIN actions
   ON actions.rule_id = rul.rule_id
 
 /* ===== LEVEL 1 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag1
-       ON ag1.approval_group_name = actions.level1
-LEFT JOIN por_amx_approval_group_members gm1
-       ON gm1.approval_group_id = ag1.approval_group_id
-LEFT JOIN per_users_vl pu1
-       ON pu1.person_id = gm1.person_id
+LEFT JOIN pox_approval_groups pg1
+       ON pg1.approval_group_name = actions.level1
 
 /* ===== LEVEL 2 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag2
-       ON ag2.approval_group_name = actions.level2
-LEFT JOIN por_amx_approval_group_members gm2
-       ON gm2.approval_group_id = ag2.approval_group_id
-LEFT JOIN per_users_vl pu2
-       ON pu2.person_id = gm2.person_id
+LEFT JOIN pox_approval_groups pg2
+       ON pg2.approval_group_name = actions.level2
 
 /* ===== LEVEL 3 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag3
-       ON ag3.approval_group_name = actions.level3
-LEFT JOIN por_amx_approval_group_members gm3
-       ON gm3.approval_group_id = ag3.approval_group_id
-LEFT JOIN per_users_vl pu3
-       ON pu3.person_id = gm3.person_id
+LEFT JOIN pox_approval_groups pg3
+       ON pg3.approval_group_name = actions.level3
 
 /* ===== LEVEL 4 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag4
-       ON ag4.approval_group_name = actions.level4
-LEFT JOIN por_amx_approval_group_members gm4
-       ON gm4.approval_group_id = ag4.approval_group_id
-LEFT JOIN per_users_vl pu4
-       ON pu4.person_id = gm4.person_id
+LEFT JOIN pox_approval_groups pg4
+       ON pg4.approval_group_name = actions.level4
 
 /* ===== LEVEL 5 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag5
-       ON ag5.approval_group_name = actions.level5
-LEFT JOIN por_amx_approval_group_members gm5
-       ON gm5.approval_group_id = ag5.approval_group_id
-LEFT JOIN per_users_vl pu5
-       ON pu5.person_id = gm5.person_id
+LEFT JOIN pox_approval_groups pg5
+       ON pg5.approval_group_name = actions.level5
 
 /* ===== LEVEL 6 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag6
-       ON ag6.approval_group_name = actions.level6
-LEFT JOIN por_amx_approval_group_members gm6
-       ON gm6.approval_group_id = ag6.approval_group_id
-LEFT JOIN per_users_vl pu6
-       ON pu6.person_id = gm6.person_id
+LEFT JOIN pox_approval_groups pg6
+       ON pg6.approval_group_name = actions.level6
 
 /* ===== LEVEL 7 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag7
-       ON ag7.approval_group_name = actions.level7
-LEFT JOIN por_amx_approval_group_members gm7
-       ON gm7.approval_group_id = ag7.approval_group_id
-LEFT JOIN per_users_vl pu7
-       ON pu7.person_id = gm7.person_id
+LEFT JOIN pox_approval_groups pg7
+       ON pg7.approval_group_name = actions.level7
 
 /* ===== LEVEL 8 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag8
-       ON ag8.approval_group_name = actions.level8
-LEFT JOIN por_amx_approval_group_members gm8
-       ON gm8.approval_group_id = ag8.approval_group_id
-LEFT JOIN per_users_vl pu8
-       ON pu8.person_id = gm8.person_id
+LEFT JOIN pox_approval_groups pg8
+       ON pg8.approval_group_name = actions.level8
 
-WHERE rul.sandbox_flag = 'Y'
+WHERE rul.sandbox_flag = 'Y';
