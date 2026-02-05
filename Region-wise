@@ -1,7 +1,7 @@
 WITH actions AS (
     SELECT
-        act.rule_id,
-        act.action_code,
+        act.action_code                         AS action,
+        act.rule_id                             AS rule_id,
 
         MAX(CASE WHEN act.action_number = 1 THEN act.approval_group_name END) AS level1,
         MAX(CASE WHEN act.action_number = 2 THEN act.approval_group_name END) AS level2,
@@ -10,107 +10,71 @@ WITH actions AS (
         MAX(CASE WHEN act.action_number = 5 THEN act.approval_group_name END) AS level5,
         MAX(CASE WHEN act.action_number = 6 THEN act.approval_group_name END) AS level6,
         MAX(CASE WHEN act.action_number = 7 THEN act.approval_group_name END) AS level7,
-        MAX(CASE WHEN act.action_number = 8 THEN act.approval_group_name END) AS level8
+        MAX(CASE WHEN act.action_number = 8 THEN act.approval_group_name END) AS level8,
+
+        MAX(CASE WHEN act.action_number = 1 THEN grp.approval_group_id END) AS level1_group_id,
+        MAX(CASE WHEN act.action_number = 2 THEN grp.approval_group_id END) AS level2_group_id,
+        MAX(CASE WHEN act.action_number = 3 THEN grp.approval_group_id END) AS level3_group_id,
+        MAX(CASE WHEN act.action_number = 4 THEN grp.approval_group_id END) AS level4_group_id,
+        MAX(CASE WHEN act.action_number = 5 THEN grp.approval_group_id END) AS level5_group_id,
+        MAX(CASE WHEN act.action_number = 6 THEN grp.approval_group_id END) AS level6_group_id,
+        MAX(CASE WHEN act.action_number = 7 THEN grp.approval_group_id END) AS level7_group_id,
+        MAX(CASE WHEN act.action_number = 8 THEN grp.approval_group_id END) AS level8_group_id
+
     FROM por_amx_actions_vl act
+
+    LEFT JOIN por_amx_approval_groups_vl grp
+           ON grp.approval_group_name = act.approval_group_name
+          AND grp.sandbox_flag = 'Y'
+
     WHERE act.sandbox_flag = 'Y'
-    GROUP BY act.rule_id, act.action_code
+    GROUP BY act.action_code, act.rule_id
 )
 
 SELECT
-    rul.rule_id,
-    rul.display_rule_name AS rule_name,
-    actions.action_code,
+    rul.rule_id                                AS rule_id,
+    rul.display_rule_name                      AS rule,
+    rul.conditions_string                     AS condition,
+    rul.active_flag                           AS isactive,
+
+    actions.action                            AS action,
 
     actions.level1,
-    mem1.member   AS level1_member,
-    mem1.type     AS level1_type,
-    mem1.sequence AS level1_sequence,
-
+    actions.level1_group_id,
     actions.level2,
-    mem2.member   AS level2_member,
-    mem2.type     AS level2_type,
-    mem2.sequence AS level2_sequence,
-
+    actions.level2_group_id,
     actions.level3,
-    mem3.member   AS level3_member,
-    mem3.type     AS level3_type,
-    mem3.sequence AS level3_sequence,
-
+    actions.level3_group_id,
     actions.level4,
-    mem4.member   AS level4_member,
-    mem4.type     AS level4_type,
-    mem4.sequence AS level4_sequence,
-
+    actions.level4_group_id,
     actions.level5,
-    mem5.member   AS level5_member,
-    mem5.type     AS level5_type,
-    mem5.sequence AS level5_sequence,
-
+    actions.level5_group_id,
     actions.level6,
-    mem6.member   AS level6_member,
-    mem6.type     AS level6_type,
-    mem6.sequence AS level6_sequence,
-
+    actions.level6_group_id,
     actions.level7,
-    mem7.member   AS level7_member,
-    mem7.type     AS level7_type,
-    mem7.sequence AS level7_sequence,
-
+    actions.level7_group_id,
     actions.level8,
-    mem8.member   AS level8_member,
-    mem8.type     AS level8_type,
-    mem8.sequence AS level8_sequence
+    actions.level8_group_id,
+
+    task.task_key                             AS task,
+    stg.stage_key                             AS stage,
+    part.participant_key                      AS participant,
+    part.participant_id                       AS participant_id
 
 FROM por_amx_rules_vl rul
+
 JOIN actions
   ON actions.rule_id = rul.rule_id
 
-/* ===== LEVEL 1 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag1
-       ON ag1.approval_group_name = actions.level1
-LEFT JOIN fa_fusion_soainfra.wfapprovalgroupmembers mem1
-       ON mem1.approvalgroupid = ag1.approval_group_id
+JOIN por_amx_tasks_vl task
+  ON task.task_id = rul.task_id
 
-/* ===== LEVEL 2 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag2
-       ON ag2.approval_group_name = actions.level2
-LEFT JOIN fa_fusion_soainfra.wfapprovalgroupmembers mem2
-       ON mem2.approvalgroupid = ag2.approval_group_id
+JOIN por_amx_stages_vl stg
+  ON stg.stage_id = rul.stage_id
+ AND stg.task_id  = task.task_id
 
-/* ===== LEVEL 3 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag3
-       ON ag3.approval_group_name = actions.level3
-LEFT JOIN fa_fusion_soainfra.wfapprovalgroupmembers mem3
-       ON mem3.approvalgroupid = ag3.approval_group_id
+JOIN por_amx_participants_vl part
+  ON part.participant_id = rul.participant_id
+ AND part.stage_id       = stg.stage_id
 
-/* ===== LEVEL 4 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag4
-       ON ag4.approval_group_name = actions.level4
-LEFT JOIN fa_fusion_soainfra.wfapprovalgroupmembers mem4
-       ON mem4.approvalgroupid = ag4.approval_group_id
-
-/* ===== LEVEL 5 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag5
-       ON ag5.approval_group_name = actions.level5
-LEFT JOIN fa_fusion_soainfra.wfapprovalgroupmembers mem5
-       ON mem5.approvalgroupid = ag5.approval_group_id
-
-/* ===== LEVEL 6 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag6
-       ON ag6.approval_group_name = actions.level6
-LEFT JOIN fa_fusion_soainfra.wfapprovalgroupmembers mem6
-       ON mem6.approvalgroupid = ag6.approval_group_id
-
-/* ===== LEVEL 7 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag7
-       ON ag7.approval_group_name = actions.level7
-LEFT JOIN fa_fusion_soainfra.wfapprovalgroupmembers mem7
-       ON mem7.approvalgroupid = ag7.approval_group_id
-
-/* ===== LEVEL 8 ===== */
-LEFT JOIN por_amx_approval_groups_vl ag8
-       ON ag8.approval_group_name = actions.level8
-LEFT JOIN fa_fusion_soainfra.wfapprovalgroupmembers mem8
-       ON mem8.approvalgroupid = ag8.approval_group_id
-
-WHERE rul.sandbox_flag = 'Y';
+WHERE rul.sandbox_flag = 'Y'
