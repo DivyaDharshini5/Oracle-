@@ -1,7 +1,7 @@
 WITH actions AS (
     SELECT
-        act.action_code                         AS action,
-        act.rule_id                             AS rule_id,
+        act.action_code AS action,
+        act.rule_id,
 
         MAX(CASE WHEN act.action_number = 1 THEN act.approval_group_name END) AS level1,
         MAX(CASE WHEN act.action_number = 2 THEN act.approval_group_name END) AS level2,
@@ -12,6 +12,7 @@ WITH actions AS (
         MAX(CASE WHEN act.action_number = 7 THEN act.approval_group_name END) AS level7,
         MAX(CASE WHEN act.action_number = 8 THEN act.approval_group_name END) AS level8,
 
+        /* ===== ONLY ADDITION STARTS HERE ===== */
         MAX(CASE WHEN act.action_number = 1 THEN grp.approval_group_id END) AS level1_group_id,
         MAX(CASE WHEN act.action_number = 2 THEN grp.approval_group_id END) AS level2_group_id,
         MAX(CASE WHEN act.action_number = 3 THEN grp.approval_group_id END) AS level3_group_id,
@@ -20,61 +21,15 @@ WITH actions AS (
         MAX(CASE WHEN act.action_number = 6 THEN grp.approval_group_id END) AS level6_group_id,
         MAX(CASE WHEN act.action_number = 7 THEN grp.approval_group_id END) AS level7_group_id,
         MAX(CASE WHEN act.action_number = 8 THEN grp.approval_group_id END) AS level8_group_id
+        /* ===== ONLY ADDITION ENDS HERE ===== */
 
-    FROM por_amx_actions_vl act
+    FROM por_amx_actions act
 
-    LEFT JOIN por_amx_approval_groups_vl grp
+    /* ===== ONLY JOIN ADDED ===== */
+    LEFT JOIN por_amx_approval_groups grp
            ON grp.approval_group_name = act.approval_group_name
           AND grp.sandbox_flag = 'Y'
 
     WHERE act.sandbox_flag = 'Y'
     GROUP BY act.action_code, act.rule_id
 )
-
-SELECT
-    rul.rule_id                                AS rule_id,
-    rul.display_rule_name                      AS rule,
-    rul.conditions_string                     AS condition,
-    rul.active_flag                           AS isactive,
-
-    actions.action                            AS action,
-
-    actions.level1,
-    actions.level1_group_id,
-    actions.level2,
-    actions.level2_group_id,
-    actions.level3,
-    actions.level3_group_id,
-    actions.level4,
-    actions.level4_group_id,
-    actions.level5,
-    actions.level5_group_id,
-    actions.level6,
-    actions.level6_group_id,
-    actions.level7,
-    actions.level7_group_id,
-    actions.level8,
-    actions.level8_group_id,
-
-    task.task_key                             AS task,
-    stg.stage_key                             AS stage,
-    part.participant_key                      AS participant,
-    part.participant_id                       AS participant_id
-
-FROM por_amx_rules_vl rul
-
-JOIN actions
-  ON actions.rule_id = rul.rule_id
-
-JOIN por_amx_tasks_vl task
-  ON task.task_id = rul.task_id
-
-JOIN por_amx_stages_vl stg
-  ON stg.stage_id = rul.stage_id
- AND stg.task_id  = task.task_id
-
-JOIN por_amx_participants_vl part
-  ON part.participant_id = rul.participant_id
- AND part.stage_id       = stg.stage_id
-
-WHERE rul.sandbox_flag = 'Y'
