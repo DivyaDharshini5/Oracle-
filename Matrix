@@ -1,5 +1,13 @@
-{
-  "fileName": "AP_Invoice_Report.pdf",
-  "contentType": "application/pdf",
-  "reportContent": "JVBERi0xLjQKJcfsj6IKNSAwIG9iago8PC9UeXBlL1BhZ2UvUGFyZW50IDEgMCBSCj4+CmVuZG9iag=="
-}
+WHERE (
+        :P_BU_NAME IS NULL
+        OR bu_cond LIKE '%' || :P_BU_NAME || '%'
+        OR bu_cond LIKE '%' || 
+           (SELECT organization_id
+              FROM hr_organization_units
+             WHERE name = :P_BU_NAME
+               AND ROWNUM = 1) 
+           || '%'
+      )
+AND attribute4 LIKE '%' || :P_DEPT || '%'
+AND attribute5 LIKE '%' || :P_ENTITY || '%'
+ORDER BY RULE ASC
