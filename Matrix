@@ -1,1 +1,1 @@
-<?xdoxslt.format_date(INVOICE_DATE,'yyyy-MM-dd','dd-MMMM-yyyy','pt-PT',$_XDOTIMEZONE)?>
+<?xdoxslt.format_date(INVOICE_DATE,'yyyy-MM-dd','dd-MMMM-yyyy','pt',$_XDOTIMEZONE)?>
