@@ -1,13 +1,1 @@
-WHERE (
-        :P_BU_NAME IS NULL
-        OR bu_cond LIKE '%' || :P_BU_NAME || '%'
-        OR bu_cond LIKE '%' || 
-           (SELECT organization_id
-              FROM hr_organization_units
-             WHERE name = :P_BU_NAME
-               AND ROWNUM = 1) 
-           || '%'
-      )
-AND attribute4 LIKE '%' || :P_DEPT || '%'
-AND attribute5 LIKE '%' || :P_ENTITY || '%'
-ORDER BY RULE ASC
+<?xdoxslt.format_date(INVOICE_DATE,'yyyy-MM-dd','dd-MMMM-yyyy','pt-PT',$_XDOTIMEZONE)?>
